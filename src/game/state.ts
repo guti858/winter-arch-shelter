@@ -88,7 +88,7 @@ export const GOAL_XP = 80;
 // Contenido
 
 export interface PillarDef { id: PillarId; name: string; icon: string; color: string; description: string }
-export interface ObjectDef { pillar: PillarId; name: string; hint: string; special?: 'journal' | 'goals' }
+export interface ObjectDef { pillar: PillarId; name: string; hint: string; icon: string; short: string; special?: 'journal' | 'goals' }
 
 export const PILLAR_DEFS = pillarsJson.pillars as PillarDef[];
 export const OBJECT_DEFS = pillarsJson.objects as Record<ObjectId, ObjectDef>;

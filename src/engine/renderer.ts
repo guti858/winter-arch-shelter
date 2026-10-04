@@ -21,8 +21,9 @@ export interface View {
 }
 
 export function computeView(w: number, h: number, dpr: number): View {
-  const top = 64; // HUD
-  const bottom = 76; // dock de pilares
+  const narrow = w <= 760;
+  const top = narrow ? 124 : 64; // HUD (en móvil ocupa tres filas)
+  const bottom = narrow ? 64 : 76; // dock de pilares
   const availH = Math.max(200, h - top - bottom);
   // Extensión del diorama en px isométricos: ancho ≈ 540, alto ≈ 400 (paredes + suelo + losa)
   const scale = Math.max(0.45, Math.min(2.4, Math.min((availH * 0.86) / 400, (w * 0.92) / 560)));
@@ -168,6 +169,10 @@ export class Renderer {
   private vignette: HTMLCanvasElement | null = null;
   /** Media móvil del tiempo de frame: si el equipo va justo, el cuarto se refresca a 20 Hz. */
   private frameCost = 1 / 60;
+  /** Desplazamiento horizontal del diorama para dejar sitio al panel lateral. */
+  private baseOx = 0;
+  private shift = 0;
+  private shiftTarget = 0;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -191,6 +196,8 @@ export class Renderer {
     this.room.height = Math.ceil(this.roomFrame.h * dpr);
     this.lighting.resize(this.roomFrame);
     this.roomSig = '';
+    this.baseOx = view.ox;
+    this.shift = 0;
     this.buildBackdrop();
     this.vignette = makeVignette(view);
   }
@@ -217,6 +224,19 @@ export class Renderer {
     ctx.restore();
     setWorldTransform(ctx, view);
     drawShadow(ctx);
+  }
+
+  /** Ancho ocupado por un panel a la derecha (px CSS): desplaza el cuarto lo justo para no taparlo. */
+  setRightInset(px: number) {
+    const { view } = this;
+    if (px <= 0 || view.w < 900) {
+      this.shiftTarget = 0;
+      return;
+    }
+    const half = (ROOM_BOX.w / 2) * view.scale;
+    const need = this.baseOx + half - (view.w - px - 12);
+    const room = this.baseOx - half - 8;
+    this.shiftTarget = Math.max(0, Math.min(need, room));
   }
 
   toScreen(x: number, y: number, z: number): P2 {
@@ -257,6 +277,9 @@ export class Renderer {
     const t = env.t;
     const amb = getAmbient(env.level, env.phase);
     this.frameCost += (dt - this.frameCost) * 0.05;
+    this.shift += (this.shiftTarget - this.shift) * Math.min(1, dt * (env.reducedMotion ? 60 : 6));
+    if (Math.abs(this.shiftTarget - this.shift) < 0.3) this.shift = this.shiftTarget;
+    view.ox = this.baseOx - this.shift;
 
     // parallax suave según el ratón (0 en táctil o con movimiento reducido)
     const want = env.reducedMotion || pointer.isTouch ? { x: 0, y: 0 } : { x: pointer.nx, y: pointer.ny };
@@ -271,7 +294,7 @@ export class Renderer {
     ctx.globalCompositeOperation = 'source-over';
     this.city.draw(ctx, t, this.parallax.x, this.parallax.y, amb.cityGlow);
     this.snow.draw(ctx, 'back', amb.snow, false);
-    ctx.drawImage(this.backdrop, 0, 0, view.w, view.h);
+    ctx.drawImage(this.backdrop, -this.shift, 0, view.w, view.h);
 
     // cuarto iluminado (cacheado)
     const lights = computeLights(env, amb);
