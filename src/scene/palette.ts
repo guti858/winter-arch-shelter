@@ -68,7 +68,7 @@ const PHASE_TINT: Record<1 | 2 | 3, string> = {
 export function getAmbient(level: number, phase: 1 | 2 | 3): Ambient {
   const t = Math.max(0, Math.min(1, (level - 1) / 9));
   const base = mix('#3a4278', PHASE_TINT[phase], 0.35);
-  const ambient = mix(base, mix('#8f88b8', '#b09a9a', phase === 3 ? 0.5 : 0.2), t * 0.55);
+  const ambient = mix(base, mix('#8f88b8', '#b09a9a', phase === 3 ? 0.5 : 0.2), t * 0.32);
   const warm = mix('#ffb347', phase === 3 ? '#ffc97a' : '#ffb06a', 0.5);
   return {
     ambient,

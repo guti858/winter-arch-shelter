@@ -3,6 +3,7 @@ import { drawBox, drawCylinder, fillPoly, p, depthKey, type P2 } from '../engine
 import { rgba, shade } from '../engine/color';
 import type { ObjectId, PillarId } from '../game/state';
 import { BOOK_COLORS, MAT, blanketColor } from './palette';
+import { mulberry32 } from '../engine/random';
 import { WINDOW, WALL_T } from './room';
 
 export interface Box { x: number; y: number; z: number; w: number; d: number; h: number }
@@ -10,8 +11,13 @@ export interface Box { x: number; y: number; z: number; w: number; d: number; h:
 /** Lo que la escena necesita saber del juego para dibujarse. */
 export interface SceneEnv {
   level: number; // 1..10
+  phase: 1 | 2 | 3;
   t: number; // segundos
   meters: Record<PillarId, number>; // 0..1
+  /** Medidor de luz por objeto (deriva del pilar asociado). */
+  glow: Record<ObjectId, number>;
+  /** Destello temporal de recompensa por objeto (0..1, decae). */
+  flash: Partial<Record<ObjectId, number>>;
   goals: { text: string; done: boolean }[];
   bossDecor: number | null; // decoración temporal del reto semanal
   timerRunning: boolean;
@@ -75,16 +81,6 @@ function leaf(ctx: CanvasRenderingContext2D, at: P2, len: number, wid: number, a
   ctx.lineTo(len * 0.85, 0);
   ctx.stroke();
   ctx.restore();
-}
-
-export function mulberry32(seed: number) {
-  return () => {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 // ---------------------------------------------------------------------------
