@@ -5,7 +5,7 @@ import type { ObjectId, PillarId } from '../game/state';
 import type { DayLight } from '../game/streaks';
 import { BOOK_COLORS, MAT, blanketColor } from './palette';
 import { mulberry32 } from '../engine/random';
-import { WINDOW, WALL_T } from './room';
+import { gradPoly, ROOM_SIZE, strokePoly, WINDOW, WALL_T } from './room';
 
 /** Vela del alféizar: entre el parteluz y la cortina derecha (que tapa x1 ± 0,35). */
 export const CANDLE_X = WINDOW.x1 - 0.8;
@@ -94,6 +94,34 @@ function leaf(ctx: CanvasRenderingContext2D, at: P2, len: number, wid: number, a
   ctx.restore();
 }
 
+/** Sombra de contacto suave: varias capas casi transparentes que crecen (sin filtros de desenfoque). */
+function softShadow(
+  ctx: CanvasRenderingContext2D,
+  x0: number, y0: number, x1: number, y1: number,
+  { grow = 0.26, alpha = 0.2, dx = 0.08, dy = 0.08 } = {},
+) {
+  const S = ROOM_SIZE, steps = 6;
+  for (let i = steps; i >= 1; i--) {
+    const g = (grow * i) / steps;
+    quadZ(
+      ctx, 0.004,
+      Math.max(0, x0 - g * 0.4 + dx), Math.min(S, x1 + g + dx),
+      Math.max(0, y0 - g * 0.4 + dy), Math.min(S, y1 + g + dy),
+      `rgba(6,6,24,${(alpha / steps).toFixed(3)})`,
+    );
+  }
+}
+
+/** Línea de luz sobre un canto (brillo especular fino). */
+function edge(ctx: CanvasRenderingContext2D, pts: P2[], color = 'rgba(255,255,255,0.28)', width = 1) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'butt';
+  ctx.beginPath();
+  pts.forEach((pt, i) => (i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1])));
+  ctx.stroke();
+}
+
 // ---------------------------------------------------------------------------
 // Estantería (Mente)
 
@@ -125,9 +153,19 @@ function drawShelf(ctx: CanvasRenderingContext2D, env: SceneEnv) {
   const wood = MAT.wood;
   drawBox(ctx, X, Y, 0, 0.08, D, H, shade(wood, -0.25));
   drawBox(ctx, X + 0.08, Y, 0, W - 0.08, 0.07, H, wood);
+  // sombra que proyecta cada tabla sobre el fondo de la estantería
+  for (const zb of [0.6, 1.2, 1.8, H - 0.06]) {
+    gradPoly(
+      ctx,
+      [[0.081, Y + 0.07, zb - 0.24], [0.081, Y + D - 0.07, zb - 0.24], [0.081, Y + D - 0.07, zb], [0.081, Y + 0.07, zb]],
+      [0.081, Y, zb], [0.081, Y, zb - 0.24],
+      [[0, 'rgba(6,4,14,0.38)'], [1, 'rgba(6,4,14,0)']],
+    );
+  }
   const levels = [0.0, 0.6, 1.2, 1.8];
   levels.forEach((zb, i) => {
     drawBox(ctx, X + 0.08, Y + 0.07, zb, W - 0.08, D - 0.14, 0.06, wood);
+    edge(ctx, [p(X + W, Y + 0.07, zb + 0.06), p(X + W, Y + D - 0.07, zb + 0.06)], 'rgba(255,226,190,0.3)', 0.9);
     const n = booksVisible(env.level, i);
     let y = Y + 0.12;
     const books = SHELF_BOOKS[i];
@@ -150,6 +188,16 @@ function drawShelf(ctx: CanvasRenderingContext2D, env: SceneEnv) {
   });
   drawBox(ctx, X + 0.08, Y + 0.07, H - 0.06, W - 0.08, D - 0.14, 0.06, shade(wood, 0.05));
   drawBox(ctx, X + 0.08, Y + D - 0.07, 0, W - 0.08, 0.07, H, wood);
+  edge(ctx, [p(X + W, Y + 0.07, H), p(X + W, Y + D - 0.07, H)], 'rgba(255,226,190,0.34)', 0.9);
+  edge(ctx, [p(X + 0.08, Y + D, H), p(X + W, Y + D, H)], 'rgba(255,226,190,0.22)', 0.9);
+  edge(ctx, [p(X + W, Y + D - 0.07, 0.04), p(X + W, Y + D - 0.07, H)], 'rgba(255,226,190,0.18)', 0.9);
+  // sobre la estantería: libros tumbados y una suculenta
+  drawBox(ctx, 0.2, 1.08, H, 0.5, 0.52, 0.07, BOOK_COLORS[4]);
+  drawBox(ctx, 0.25, 1.12, H + 0.07, 0.42, 0.44, 0.06, BOOK_COLORS[7]);
+  quadX(ctx, 0.701, 1.1, 1.58, H + 0.01, H + 0.04, rgba('#ffffff', 0.35));
+  drawCylinder(ctx, 0.45, 2.6, H, 0.09, 0.14, MAT.terracotta);
+  const sprout = p(0.45, 2.6, H + 0.13);
+  for (const a of [-2.5, -2.0, -1.55, -1.1, -0.65]) leaf(ctx, sprout, 9, 2.8, a, MAT.leaf);
   // decoración del reto semanal sobre la estantería
   if (env.bossDecor !== null) drawBossDecor(ctx, env.bossDecor, X + 0.42, Y + 1.0, H, env.t);
 }
@@ -253,6 +301,20 @@ function drawWindow(ctx: CanvasRenderingContext2D, env: SceneEnv) {
   fillPoly(ctx, [[x0 + 0.3, -0.02, z1], [x0 + 0.65, -0.02, z1], [x0 + 0.15, -0.02, z0], [x0 - 0.0, -0.02, z0 + 0.25]], '#dff3ff');
   fillPoly(ctx, [[x0 + 1.75, -0.02, z1], [x0 + 1.85, -0.02, z1], [x0 + 1.35, -0.02, z0], [x0 + 1.25, -0.02, z0]], '#dff3ff');
   ctx.restore();
+  // escarcha en las esquinas inferiores y nieve acumulada en el borde exterior del cristal
+  fillPoly(ctx, [[x0, -0.02, z0], [x0 + 0.62, -0.02, z0], [x0 + 0.3, -0.02, z0 + 0.12], [x0 + 0.09, -0.02, z0 + 0.42], [x0, -0.02, z0 + 0.62]], 'rgba(236,247,255,0.2)');
+  fillPoly(ctx, [[x1, -0.02, z0], [x1 - 0.62, -0.02, z0], [x1 - 0.3, -0.02, z0 + 0.12], [x1 - 0.09, -0.02, z0 + 0.42], [x1, -0.02, z0 + 0.62]], 'rgba(236,247,255,0.2)');
+  const drift: [number, number, number][] = [[x0 + 0.07, -0.02, z0 + 0.07]];
+  for (let k = 0, xx = x0 + 0.07; xx < x1 - 0.07; k++) {
+    xx = Math.min(x1 - 0.07, xx + 0.3);
+    drift.push([xx, -0.02, z0 + (k % 2 ? 0.13 : 0.1)]);
+  }
+  drift.push([x1 - 0.07, -0.02, z0 + 0.07]);
+  ctx.beginPath();
+  drift.forEach((pt, i) => { const [sx, sy] = p(pt[0], pt[1], pt[2]); if (i) ctx.lineTo(sx, sy); else ctx.moveTo(sx, sy); });
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(240,248,255,0.5)';
+  ctx.fill();
   // marco
   const f = 0.07, frame = '#d7dbea';
   quadY(ctx, 0.0, x0, x1, z1 - f, z1, frame);
@@ -262,8 +324,15 @@ function drawWindow(ctx: CanvasRenderingContext2D, env: SceneEnv) {
   const mx = (x0 + x1) / 2;
   quadY(ctx, 0.0, mx - 0.03, mx + 0.03, z0, z1, frame);
   quadY(ctx, 0.0, x0, x1, (z0 + z1) / 2 - 0.025, (z0 + z1) / 2 + 0.025, frame);
-  // alféizar interior
+  // alféizar interior, con la sombra que proyecta sobre el friso
+  gradPoly(
+    ctx,
+    [[x0 - 0.1, 0.012, z0 - 0.34], [x1 + 0.1, 0.012, z0 - 0.34], [x1 + 0.1, 0.012, z0 - 0.07], [x0 - 0.1, 0.012, z0 - 0.07]],
+    [0, 0, z0 - 0.07], [0, 0, z0 - 0.34],
+    [[0, 'rgba(8,8,30,0.32)'], [1, 'rgba(8,8,30,0)']],
+  );
   drawBox(ctx, x0 - 0.12, 0, z0 - 0.07, x1 - x0 + 0.24, 0.2, 0.07, '#e4e6f0');
+  edge(ctx, [p(x0 - 0.12, 0.2, z0), p(x1 + 0.12, 0.2, z0), p(x1 + 0.12, 0, z0)], 'rgba(255,255,255,0.55)', 0.9);
   // vela/farolillo en el alféizar (nivel 3+), fuera del alcance de las cortinas
   if (env.level >= 3) {
     drawBox(ctx, CANDLE_X - 0.08, 0.04, z0, 0.16, 0.12, 0.2, '#f3e2c4');
@@ -301,8 +370,16 @@ function drawWindow(ctx: CanvasRenderingContext2D, env: SceneEnv) {
 function drawBed(ctx: CanvasRenderingContext2D, env: SceneEnv) {
   // mesilla + lámpara
   drawBox(ctx, 0.05, 4.95, 0, 0.6, 0.62, 0.5, MAT.wood);
-  quadY(ctx, 5.571, 0.12, 0.58, 0.28, 0.3, rgba('#2a1c14', 0.6));
-  dot(ctx, p(0.35, 5.571, 0.37), 0.9, '#d9b98a');
+  // dos cajones con tirador (cara visible hacia delante) y un costado con panel
+  quadY(ctx, 5.5715, 0.1, 0.6, 0.05, 0.26, rgba('#1c110b', 0.2));
+  quadY(ctx, 5.5715, 0.1, 0.6, 0.32, 0.46, rgba('#1c110b', 0.2));
+  quadY(ctx, 5.572, 0.12, 0.58, 0.27, 0.31, rgba('#2a1c14', 0.6));
+  dot(ctx, p(0.35, 5.572, 0.16), 0.9, '#d9b98a');
+  dot(ctx, p(0.35, 5.572, 0.39), 0.9, '#d9b98a');
+  quadX(ctx, 0.6505, 5.0, 5.52, 0.07, 0.43, rgba('#1c110b', 0.14));
+  edge(ctx, [p(0.05, 4.95, 0.5), p(0.65, 4.95, 0.5), p(0.65, 5.57, 0.5)], 'rgba(255,226,190,0.3)', 0.9);
+  // vaso de agua
+  drawCylinder(ctx, 0.52, 5.1, 0.5, 0.045, 0.1, '#bfe6ff');
   drawCylinder(ctx, 0.33, 5.25, 0.5, 0.08, 0.2, '#c9c3b5');
   // pantalla (trapecio)
   const lit = env.level >= 8;
@@ -323,22 +400,50 @@ function drawBed(ctx: CanvasRenderingContext2D, env: SceneEnv) {
 
   // cabecero
   drawBox(ctx, 0, 5.65, 0, 0.16, 2.0, 1.05, MAT.woodDark);
+  // paneles hundidos y canto iluminado del cabecero
+  quadX(ctx, 0.1605, 5.78, 6.58, 0.56, 0.95, rgba('#000000', 0.2));
+  quadX(ctx, 0.1605, 6.72, 7.52, 0.56, 0.95, rgba('#000000', 0.2));
+  edge(ctx, [p(0.16, 5.65, 1.05), p(0.16, 7.65, 1.05)], 'rgba(255,226,190,0.32)', 1);
+  edge(ctx, [p(0.16, 5.65, 0.3), p(0.16, 5.65, 1.05)], 'rgba(255,226,190,0.2)', 1);
   // estructura
   drawBox(ctx, 0.16, 5.7, 0, 2.55, 1.9, 0.3, MAT.woodDark);
+  edge(ctx, [p(0.16, 7.6, 0.3), p(2.71, 7.6, 0.3), p(2.71, 5.7, 0.3)], 'rgba(255,226,190,0.2)', 0.9);
   // colchón
   drawBox(ctx, 0.2, 5.74, 0.3, 2.47, 1.82, 0.2, MAT.white);
   const made = env.level >= 3;
   if (made) {
-    drawBox(ctx, 0.3, 5.95, 0.5, 0.5, 1.4, 0.12, '#f7f5fb');
+    // dos almohadas mullidas
+    for (const py of [5.84, 6.74]) {
+      drawBox(ctx, 0.3, py, 0.5, 0.52, 0.78, 0.11, '#f7f5fb');
+      quadZ(ctx, 0.612, 0.36, 0.76, py + 0.06, py + 0.72, rgba('#ffffff', 0.45));
+      quadZ(ctx, 0.613, 0.5, 0.62, py + 0.2, py + 0.58, rgba('#9a93b8', 0.16));
+    }
     const bc = blanketColor(env.level);
     // manta: superficie + caída por los lados visibles
     drawBox(ctx, 0.95, 5.72, 0.5, 1.75, 1.86, 0.05, bc);
     quadY(ctx, 7.58, 0.95, 2.7, 0.18, 0.5, shade(bc, -0.3));
     quadX(ctx, 2.7, 5.72, 7.58, 0.18, 0.5, shade(bc, -0.45));
+    // acolchado: costuras a lo largo de la manta
+    ctx.strokeStyle = rgba(shade(bc, -0.35), 0.45);
+    ctx.lineWidth = 0.7;
+    ctx.lineCap = 'butt';
+    ctx.beginPath();
+    for (const xx of [1.5, 2.05]) {
+      const a = p(xx, 5.76, 0.551), b = p(xx, 7.54, 0.551);
+      ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+    }
+    ctx.stroke();
+    edge(ctx, [p(0.95, 7.58, 0.55), p(2.7, 7.58, 0.55), p(2.7, 5.72, 0.55)], rgba(shade(bc, 0.4), 0.55), 0.9);
     // embozo
     drawBox(ctx, 0.95, 5.72, 0.55, 0.22, 1.86, 0.03, '#f2eef8');
+    // manta ligera doblada a los pies
+    if (env.level >= 5) drawBox(ctx, 2.2, 5.72, 0.55, 0.4, 1.86, 0.035, shade(bc, 0.38));
     // cojín decorativo
-    if (env.level >= 6) drawBox(ctx, 0.45, 6.6, 0.62, 0.3, 0.5, 0.18, '#e0a85a');
+    if (env.level >= 6) {
+      drawBox(ctx, 0.42, 6.43, 0.61, 0.32, 0.5, 0.18, '#e0a85a');
+      quadZ(ctx, 0.791, 0.46, 0.71, 6.47, 6.89, rgba('#ffffff', 0.22));
+      quadY(ctx, 6.93, 0.42, 0.74, 0.69, 0.71, rgba('#7a4a1c', 0.4));
+    }
   } else {
     // manta arrugada
     drawBox(ctx, 0.7, 6.4, 0.5, 0.42, 0.6, 0.06, '#f2f0f8');
@@ -357,14 +462,29 @@ function drawDesk(ctx: CanvasRenderingContext2D, env: SceneEnv) {
   drawBox(ctx, 5.08, 0.06, 0, 0.08, 1.08, 0.75, MAT.metal);
   drawBox(ctx, 7.72, 0.06, 0, 0.08, 1.08, 0.75, MAT.metal);
   drawBox(ctx, 5.16, 0.08, 0.5, 2.56, 0.05, 0.2, shade(MAT.metal, -0.2));
+  // cajonera bajo el tablero: dos cajones con tirador
+  const ped = shade(MAT.metal, 0.04);
+  drawBox(ctx, 6.96, 0.12, 0.04, 0.76, 0.98, 0.7, ped);
+  for (const [dz0, dz1] of [[0.09, 0.37], [0.41, 0.69]]) {
+    quadY(ctx, 1.1005, 7.01, 7.67, dz0, dz1, shade(ped, -0.18));
+    edge(ctx, [p(7.01, 1.1005, dz1), p(7.67, 1.1005, dz1)], 'rgba(255,255,255,0.22)', 0.8);
+    line(ctx, p(7.24, 1.1005, (dz0 + dz1) / 2 + 0.02), p(7.44, 1.1005, (dz0 + dz1) / 2 + 0.02), '#d4d8e6', 1.4);
+  }
   // tablero
   drawBox(ctx, 5.0, 0.0, 0.75, 2.9, 1.2, 0.07, MAT.woodLight);
+  edge(ctx, [p(5.0, 1.2, 0.82), p(7.9, 1.2, 0.82), p(7.9, 0, 0.82)], 'rgba(255,236,205,0.5)', 1);
+  // alfombrilla del teclado
+  quadZ(ctx, 0.8205, 5.8, 7.26, 0.46, 1.04, rgba('#59607f', 0.5));
+  edge(ctx, [p(5.8, 1.04, 0.8205), p(7.26, 1.04, 0.8205), p(7.26, 0.46, 0.8205)], 'rgba(190,200,245,0.3)', 0.8);
   // monitor
   drawBox(ctx, 6.2, 0.18, 0.82, 0.4, 0.28, 0.02, MAT.dark);
   drawBox(ctx, 6.36, 0.2, 0.84, 0.08, 0.06, 0.22, MAT.dark);
   drawBox(ctx, 5.75, 0.12, 0.98, 1.3, 0.08, 0.72, MAT.dark);
   const scr = env.meters.foco > 0.6 ? '#5fb6e6' : MAT.screen;
   quadY(ctx, 0.201, 5.8, 7.0, 1.03, 1.66, scr);
+  // reflejo diagonal en el cristal y piloto de encendido
+  fillPoly(ctx, [[5.8, 0.2015, 1.66], [6.3, 0.2015, 1.66], [5.95, 0.2015, 1.03], [5.8, 0.2015, 1.03]], 'rgba(255,255,255,0.07)');
+  dot(ctx, p(6.94, 0.2005, 0.995), 0.9, '#6dffa8');
   // "código" en pantalla
   for (let i = 0; i < 6; i++) {
     const w = 0.25 + ((i * 37) % 7) / 10;
@@ -376,6 +496,13 @@ function drawDesk(ctx: CanvasRenderingContext2D, env: SceneEnv) {
   // libreta y lápiz
   drawBox(ctx, 5.15, 0.45, 0.82, 0.42, 0.55, 0.03, '#e9dfc7');
   line(ctx, p(5.25, 0.95, 0.86), p(5.55, 0.62, 0.86), '#d6a64a', 1.3);
+  // taza de café junto a la lámpara
+  drawCylinder(ctx, 7.62, 0.88, 0.82, 0.065, 0.12, '#e9e4f2');
+  const cup = p(7.62, 0.88, 0.94);
+  ctx.fillStyle = '#4a2f20';
+  ctx.beginPath();
+  ctx.ellipse(cup[0], cup[1], 3, 1.5, 0, 0, Math.PI * 2);
+  ctx.fill();
   // temporizador Pomodoro (tomate) cuando está corriendo
   if (env.timerRunning) {
     const c = p(5.35, 0.25, 0.9);
@@ -402,12 +529,21 @@ function drawDesk(ctx: CanvasRenderingContext2D, env: SceneEnv) {
   ctx.fill();
   if (lampOn) dot(ctx, [head[0] + 5, head[1] + 7], 2.4, '#fff4d6');
 
-  // silla
-  drawBox(ctx, 6.1, 1.55, 0.04, 0.7, 0.08, 0.04, MAT.dark);
-  drawBox(ctx, 6.41, 1.3, 0.04, 0.08, 0.6, 0.04, MAT.dark);
-  drawBox(ctx, 6.42, 1.56, 0.08, 0.06, 0.06, 0.38, MAT.metal);
-  drawBox(ctx, 6.1, 1.3, 0.46, 0.72, 0.62, 0.08, '#3f4a73');
-  drawBox(ctx, 6.1, 1.9, 0.5, 0.72, 0.08, 0.7, '#3f4a73');
+  // silla: base de cinco brazos con ruedas, pistón, asiento y respaldo
+  const cx = 6.46, cy = 1.61;
+  for (let k = 0; k < 5; k++) {
+    const a = 0.45 + (k * Math.PI * 2) / 5;
+    const tip = p(cx + Math.cos(a) * 0.38, cy + Math.sin(a) * 0.38, 0.07);
+    line(ctx, p(cx, cy, 0.12), tip, '#1d2033', 2.2);
+    dot(ctx, [tip[0], tip[1] + 1], 1.7, '#0f1120');
+  }
+  drawBox(ctx, cx - 0.03, cy - 0.03, 0.1, 0.06, 0.06, 0.37, MAT.metal);
+  drawBox(ctx, 6.1, 1.3, 0.46, 0.72, 0.62, 0.1, '#3f4a73');
+  quadZ(ctx, 0.561, 6.16, 6.76, 1.36, 1.86, rgba('#9fb0ff', 0.13));
+  edge(ctx, [p(6.1, 1.92, 0.56), p(6.82, 1.92, 0.56), p(6.82, 1.3, 0.56)], 'rgba(170,190,255,0.4)', 0.9);
+  drawBox(ctx, 6.1, 1.9, 0.52, 0.72, 0.09, 0.7, '#3f4a73');
+  quadY(ctx, 1.9905, 6.18, 6.74, 0.64, 1.12, rgba('#0b0e22', 0.22));
+  edge(ctx, [p(6.1, 1.99, 1.22), p(6.82, 1.99, 1.22), p(6.82, 1.9, 1.22)], 'rgba(170,190,255,0.45)', 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -424,8 +560,10 @@ function drawKitchen(ctx: CanvasRenderingContext2D, env: SceneEnv) {
     quadX(ctx, fx + 0.001, y0 + 0.04, y1 - 0.04, 0.12, 0.78, shade(MAT.counter, -0.48));
     line(ctx, p(fx, y0 + 0.08, 0.7), p(fx, y0 + 0.08, 0.5), '#d8d8e0', 1.2);
   }
-  // encimera
+  // encimera con canto iluminado
   drawBox(ctx, 7.0, 2.25, 0.9, 1.0, 2.15, 0.07, MAT.stone);
+  edge(ctx, [p(7.0, 4.4, 0.97), p(8.0, 4.4, 0.97), p(8.0, 2.25, 0.97)], 'rgba(214,220,246,0.4)', 1);
+  edge(ctx, [p(8.0, 2.25, 0.9), p(8.0, 4.4, 0.9)], 'rgba(8,8,30,0.35)', 1);
   // tira LED bajo la encimera (nivel 5+)
   if (env.level >= 5) quadX(ctx, 8.0, 2.27, 4.38, 0.86, 0.9, '#ffe7b0');
   // fregadero + grifo
@@ -452,9 +590,20 @@ function drawKitchen(ctx: CanvasRenderingContext2D, env: SceneEnv) {
   // nevera
   const Y = 4.45;
   drawBox(ctx, 7.0, Y, 0, 1.0, 0.9, 1.75, MAT.fridge);
+  // puertas: brillo suave arriba y sombra abajo, junta entre congelador y nevera
+  gradPoly(
+    ctx,
+    [[8.0005, Y, 0], [8.0005, Y + 0.9, 0], [8.0005, Y + 0.9, 1.75], [8.0005, Y, 1.75]],
+    [8, Y, 0], [8, Y, 1.75],
+    [[0, 'rgba(8,8,40,0.2)'], [0.55, 'rgba(255,255,255,0)'], [1, 'rgba(255,255,255,0.22)']],
+  );
   quadX(ctx, 8.001, Y + 0.04, Y + 0.86, 1.18, 1.2, shade(MAT.fridge, -0.6));
+  edge(ctx, [p(7.0, Y + 0.9, 1.75), p(8.0, Y + 0.9, 1.75), p(8.0, Y, 1.75)], 'rgba(255,255,255,0.7)', 1);
+  edge(ctx, [p(8.0, Y, 0.02), p(8.0, Y, 1.75)], 'rgba(255,255,255,0.3)', 1);
   line(ctx, p(8.0, Y + 0.12, 1.05), p(8.0, Y + 0.12, 0.6), '#9aa0b4', 1.6);
   line(ctx, p(8.0, Y + 0.12, 1.55), p(8.0, Y + 0.12, 1.3), '#9aa0b4', 1.6);
+  line(ctx, p(8.0, Y + 0.145, 1.04), p(8.0, Y + 0.145, 0.59), 'rgba(8,8,30,0.28)', 1);
+  line(ctx, p(8.0, Y + 0.145, 1.54), p(8.0, Y + 0.145, 1.29), 'rgba(8,8,30,0.28)', 1);
   // imanes
   quadX(ctx, 8.002, Y + 0.45, Y + 0.6, 1.4, 1.52, '#ffb347');
   quadX(ctx, 8.002, Y + 0.62, Y + 0.72, 0.9, 1.05, '#7fd6ff');
@@ -484,6 +633,7 @@ function drawMat(ctx: CanvasRenderingContext2D, env: SceneEnv) {
     dumbbell(ctx, 3.45, 6.05, true);
     drawBox(ctx, 3.9, 5.3, 0, 2.1, 1.25, 0.035, MAT.mat);
     for (let i = 1; i < 5; i++) quadZ(ctx, 0.036, 3.9 + i * 0.42, 3.92 + i * 0.42, 5.32, 6.53, rgba('#ffffff', 0.18));
+    edge(ctx, [p(3.9, 6.55, 0.035), p(6.0, 6.55, 0.035), p(6.0, 5.3, 0.035)], rgba(shade(MAT.mat, 0.45), 0.6), 0.9);
     // botella de agua
     drawCylinder(ctx, 5.7, 6.4, 0.035, 0.06, 0.28, '#7fd6ff');
   } else {
@@ -516,8 +666,10 @@ export function plantStage(level: number): 1 | 2 | 3 | 4 {
 function drawPlant(ctx: CanvasRenderingContext2D, env: SceneEnv) {
   const X = 7.15, Y = 6.7, S = 0.6;
   // maceta
-  drawBox(ctx, X, Y, 0, S, S, 0.42, MAT.terracotta);
+  drawBox(ctx, X - 0.05, Y - 0.05, 0, S + 0.1, S + 0.1, 0.05, shade(MAT.terracotta, -0.22));
+  drawBox(ctx, X, Y, 0.05, S, S, 0.37, MAT.terracotta);
   drawBox(ctx, X - 0.03, Y - 0.03, 0.42, S + 0.06, S + 0.06, 0.06, shade(MAT.terracotta, 0.1));
+  edge(ctx, [p(X - 0.03, Y + S + 0.03, 0.48), p(X + S + 0.03, Y + S + 0.03, 0.48), p(X + S + 0.03, Y - 0.03, 0.48)], 'rgba(255,214,190,0.45)', 0.9);
   quadZ(ctx, 0.481, X + 0.04, X + S - 0.04, Y + 0.04, Y + S - 0.04, '#4a3328');
   const stage = plantStage(env.level);
   const base = p(X + S / 2, Y + S / 2, 0.48);
@@ -565,6 +717,7 @@ function drawTable(ctx: CanvasRenderingContext2D, env: SceneEnv) {
   }
   drawBox(ctx, X + 0.1, Y + 0.1, 0.12, S - 0.2, S - 0.2, 0.03, shade(MAT.wood, -0.1));
   drawBox(ctx, X, Y, H - 0.06, S, S, 0.06, MAT.wood);
+  edge(ctx, [p(X, Y + S, H), p(X + S, Y + S, H), p(X + S, Y, H)], 'rgba(255,226,190,0.4)', 1);
   // cuaderno de finanzas + móvil
   drawBox(ctx, X + 0.18, Y + 0.2, H, 0.45, 0.35, 0.03, '#2f5d4a');
   quadZ(ctx, H + 0.031, X + 0.22, X + 0.6, Y + 0.24, Y + 0.28, rgba('#e8d7a0', 0.8));
@@ -643,13 +796,105 @@ function drawClothes(ctx: CanvasRenderingContext2D) {
 
 function drawRug(ctx: CanvasRenderingContext2D) {
   const x0 = 2.15, x1 = 5.15, y0 = 2.15, y1 = 5.05;
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  // flecos en los cuatro bordes
+  ctx.strokeStyle = rgba(MAT.rugBorder, 0.8);
+  ctx.lineWidth = 0.9;
+  ctx.lineCap = 'butt';
+  ctx.beginPath();
+  const tick = (a: P2, b: P2) => {
+    const u = p(a[0], a[1], 0.004), v = p(b[0], b[1], 0.004);
+    ctx.moveTo(u[0], u[1]); ctx.lineTo(v[0], v[1]);
+  };
+  for (let t = x0 + 0.06; t < x1; t += 0.1) { tick([t, y0], [t, y0 - 0.11]); tick([t, y1], [t, y1 + 0.11]); }
+  for (let t = y0 + 0.06; t < y1; t += 0.1) { tick([x0, t], [x0 - 0.11, t]); tick([x1, t], [x1 + 0.11, t]); }
+  ctx.stroke();
+
   quadZ(ctx, 0.005, x0, x1, y0, y1, MAT.rugBorder);
   quadZ(ctx, 0.006, x0 + 0.12, x1 - 0.12, y0 + 0.12, y1 - 0.12, MAT.rug);
   quadZ(ctx, 0.007, x0 + 0.5, x1 - 0.5, y0 + 0.5, y1 - 0.5, shade(MAT.rug, -0.15));
-  fillPoly(ctx, [
-    [(x0 + x1) / 2, y0 + 0.75, 0.008], [x1 - 0.75, (y0 + y1) / 2, 0.008],
-    [(x0 + x1) / 2, y1 - 0.75, 0.008], [x0 + 0.75, (y0 + y1) / 2, 0.008],
-  ], MAT.rugBorder);
+  // trama del tejido
+  ctx.strokeStyle = 'rgba(255,255,255,0.045)';
+  ctx.lineWidth = 0.6;
+  ctx.beginPath();
+  for (let t = y0 + 0.14; t < y1 - 0.1; t += 0.14) {
+    const u = p(x0 + 0.12, t, 0.0065), v = p(x1 - 0.12, t, 0.0065);
+    ctx.moveTo(u[0], u[1]); ctx.lineTo(v[0], v[1]);
+  }
+  ctx.stroke();
+  // greca discontinua sobre la franja del borde y fina línea interior
+  ctx.save();
+  ctx.setLineDash([2.5, 2.5]);
+  strokePoly(ctx, [[x0 + 0.06, y0 + 0.06, 0.0066], [x1 - 0.06, y0 + 0.06, 0.0066], [x1 - 0.06, y1 - 0.06, 0.0066], [x0 + 0.06, y1 - 0.06, 0.0066], [x0 + 0.06, y0 + 0.06, 0.0066]], rgba(shade(MAT.rug, -0.15), 0.8), 1);
+  ctx.restore();
+  strokePoly(ctx, [[x0 + 0.5, y0 + 0.5, 0.0075], [x1 - 0.5, y0 + 0.5, 0.0075], [x1 - 0.5, y1 - 0.5, 0.0075], [x0 + 0.5, y1 - 0.5, 0.0075], [x0 + 0.5, y0 + 0.5, 0.0075]], rgba(MAT.rugBorder, 0.45), 0.9);
+  // medallón central y rombos en las esquinas del campo
+  fillPoly(ctx, [[cx, y0 + 0.75, 0.008], [x1 - 0.75, cy, 0.008], [cx, y1 - 0.75, 0.008], [x0 + 0.75, cy, 0.008]], MAT.rugBorder);
+  fillPoly(ctx, [[cx, y0 + 0.9, 0.0085], [x1 - 0.9, cy, 0.0085], [cx, y1 - 0.9, 0.0085], [x0 + 0.9, cy, 0.0085]], shade(MAT.rug, -0.1));
+  fillPoly(ctx, [[cx, y0 + 1.15, 0.009], [x1 - 1.15, cy, 0.009], [cx, y1 - 1.15, 0.009], [x0 + 1.15, cy, 0.009]], rgba(MAT.rugBorder, 0.85));
+  for (const [qx, qy] of [[x0 + 0.33, y0 + 0.33], [x1 - 0.33, y0 + 0.33], [x0 + 0.33, y1 - 0.33], [x1 - 0.33, y1 - 0.33]]) {
+    fillPoly(ctx, [[qx - 0.09, qy - 0.09, 0.0085], [qx + 0.09, qy - 0.09, 0.0085], [qx + 0.09, qy + 0.09, 0.0085], [qx - 0.09, qy + 0.09, 0.0085]], rgba(MAT.rugBorder, 0.7));
+  }
+}
+
+/** Mancha de luz de la ventana sobre el suelo, partida por los listones del marco. */
+function drawMoonlight(ctx: CanvasRenderingContext2D) {
+  const { x0, x1, z0, z1 } = WINDOW;
+  const k = 0.62, lean = 0.28; // pendiente de los rayos y desvío lateral
+  const at = (x: number, z: number): P2 => {
+    const y = z / k;
+    return p(x + lean * y, y, 0.006);
+  };
+  const mx = (x0 + x1) / 2, mz = (z0 + z1) / 2, b = 0.05;
+  const panes: [number, number, number, number][] = [
+    [x0 + b, mx - 0.03, z0 + b, mz - 0.025], [mx + 0.03, x1 - b, z0 + b, mz - 0.025],
+    [x0 + b, mx - 0.03, mz + 0.025, z1 - b], [mx + 0.03, x1 - b, mz + 0.025, z1 - b],
+  ];
+  const a = p(3.4, 1.5), c = p(4.8, 4.5);
+  const g = ctx.createLinearGradient(a[0], a[1], c[0], c[1]);
+  g.addColorStop(0, 'rgba(196,214,255,0.16)');
+  g.addColorStop(1, 'rgba(196,214,255,0.04)');
+  ctx.fillStyle = g;
+  for (const [xa, xb, za, zb] of panes) {
+    const q = [at(xa, za), at(xb, za), at(xb, zb), at(xa, zb)];
+    ctx.beginPath();
+    q.forEach((pt, i) => (i ? ctx.lineTo(pt[0], pt[1]) : ctx.moveTo(pt[0], pt[1])));
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+/** Sombras de contacto bajo el mobiliario: asientan los objetos sobre el suelo. */
+function drawContactShadows(ctx: CanvasRenderingContext2D, env: SceneEnv) {
+  softShadow(ctx, 0, 0.9, 0.85, 3.0, { alpha: 0.22 }); // estantería
+  softShadow(ctx, 0, 5.65, 2.72, 7.65, { alpha: 0.28, grow: 0.3 }); // cama
+  softShadow(ctx, 0.05, 4.95, 0.65, 5.57, { alpha: 0.2, grow: 0.18 }); // mesilla
+  softShadow(ctx, 2.1, 0, 4.1, 0.23, { alpha: 0.2, grow: 0.16 }); // radiador
+  softShadow(ctx, 5.0, 0, 7.9, 1.2, { alpha: 0.34, grow: 0.2 }); // escritorio
+  softShadow(ctx, 6.1, 1.3, 6.82, 1.92, { alpha: 0.2, grow: 0.2 }); // silla
+  softShadow(ctx, 7.0, 2.25, 8.0, 5.35, { alpha: 0.24, grow: 0.2 }); // cocina y nevera
+  softShadow(ctx, 3.0, 3.0, 4.3, 4.3, { alpha: 0.26, grow: 0.22 }); // mesa baja
+  softShadow(ctx, 7.1, 6.65, 7.8, 7.35, { alpha: 0.2, grow: 0.2 }); // planta
+  if (env.level < 5) softShadow(ctx, 4.2, 5.4, 4.52, 6.65, { alpha: 0.18, grow: 0.14 }); // esterilla enrollada
+  if (env.level < 2) {
+    softShadow(ctx, 1.3, 1.15, 2.05, 1.8, { alpha: 0.24, grow: 0.2 });
+    softShadow(ctx, 5.35, 3.3, 5.95, 3.9, { alpha: 0.2, grow: 0.16 });
+  }
+}
+
+/** Radiador blanco bajo la ventana (invierno). */
+function drawRadiator(ctx: CanvasRenderingContext2D) {
+  const x0 = 2.1, w = 2.0, y = 0.03, d = 0.2, z0 = 0.13, z1 = 0.78;
+  drawCylinder(ctx, x0 + 0.12, y + 0.1, 0, 0.028, 0.15, '#c8ccd8');
+  drawCylinder(ctx, x0 + w - 0.12, y + 0.1, 0, 0.028, 0.15, '#c8ccd8');
+  const n = 16, cw = w / n;
+  for (let i = 0; i < n; i++) drawBox(ctx, x0 + i * cw + 0.008, y, z0, cw - 0.016, d, z1 - z0, '#eef0f8');
+  drawBox(ctx, x0 - 0.015, y - 0.005, z1 - 0.05, w + 0.03, d + 0.01, 0.05, '#f3f4fa');
+  quadY(ctx, y + d + 0.001, x0, x0 + w, z0, z0 + 0.04, rgba('#0b0e22', 0.25));
+  edge(ctx, [p(x0 - 0.015, y + d + 0.005, z1), p(x0 + w + 0.015, y + d + 0.005, z1), p(x0 + w + 0.015, y - 0.005, z1)], 'rgba(255,255,255,0.7)', 1);
+  // válvula en el extremo
+  drawCylinder(ctx, x0 + w - 0.12, y + 0.1, z1, 0.03, 0.07, '#b9bdcc');
+  dot(ctx, p(x0 + w - 0.12, y + 0.1, z1 + 0.09), 1.6, '#d9543f');
 }
 
 // ---------------------------------------------------------------------------
@@ -664,7 +909,10 @@ export const SCENE_OBJECTS: SceneObject[] = [
   // Suelo
   { id: 'rug', layer: 'floor', box: { x: 2.15, y: 2.15, z: 0, w: 3, d: 2.9, h: 0 }, visible: (e) => e.level >= 6, draw: drawRug },
   { id: 'clothes', layer: 'floor', box: { x: 1.5, y: 2, z: 0, w: 4, d: 5, h: 0 }, visible: (e) => e.level < 3, draw: drawClothes },
+  { id: 'moonlight', layer: 'floor', box: { x: 1.7, y: 1.5, z: 0, w: 4, d: 3, h: 0 }, draw: drawMoonlight },
+  { id: 'shadows', layer: 'floor', box: { x: 0, y: 0, z: 0, w: 8, d: 8, h: 0 }, draw: drawContactShadows },
   // Objetos
+  { id: 'radiator', layer: 'object', box: { x: 2.1, y: 0.03, z: 0, w: 2.0, d: 0.2, h: 0.8 }, draw: drawRadiator },
   { id: 'shelf', target: 'shelf', label: 'Estantería', layer: 'object', box: { x: 0, y: 0.9, z: 0, w: 0.85, d: 2.1, h: 2.4 }, draw: drawShelf },
   { id: 'bed', target: 'bed', label: 'Cama', layer: 'object', box: { x: 0, y: 4.95, z: 0, w: 2.72, d: 2.65, h: 1.05 }, draw: drawBed },
   { id: 'desk', target: 'desk', label: 'Escritorio', layer: 'object', box: { x: 5.0, y: 0, z: 0, w: 2.9, d: 2.0, h: 1.72 }, draw: drawDesk },
