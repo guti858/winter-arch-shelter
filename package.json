@@ -1,0 +1,21 @@
+{
+  "name": "winter-arc-room",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Winter Arc Room — tu habitación es tu progreso. Prototipo jugable en el navegador.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "simulate": "vitest run src/game/simulate.test.ts --reporter verbose"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  }
+}
