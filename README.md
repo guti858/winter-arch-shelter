@@ -44,7 +44,7 @@ El build es estático: `dist/` se puede servir desde cualquier hosting de ficher
 2. **La escena es la interfaz.** Cada pilar de vida está ligado a un objeto. Pasa el ratón por encima (contorno brillante + tooltip con el progreso de hoy) y haz clic para abrir sus tareas.
 3. **Completa tareas**: chispas doradas desde el objeto, XP flotante y el objeto se ilumina un poco más. Al subir de nivel, un barrido de luz recorre la habitación.
 4. **Mira tu edificio**: cada planta es una semana del arco (la 1, *Cimientos*, junto a la calle; la última, *Remate*, bajo tu habitación) y cada ventana un día, de lunes a domingo. Cálida si cumpliste el mínimo, más brillante si hiciste todas las diarias, azul si fue descanso, apagada si no. Las semanas que aún no han llegado están a oscuras: el arco se construye hacia arriba hasta tu cuarto. Pasa el ratón por una planta para ver su semana y haz clic para abrir su resumen.
-5. **La ciudad** sigue a lo suyo: coches con los faros encendidos (más tráfico al caer la tarde y casi nada de madrugada, según tu hora real), peatones con paraguas, semáforos, farolas, escaparates, una plaza con quiosco delante de tu portal y, en diciembre, el árbol de la plaza iluminado.
+5. **La ciudad** sigue a lo suyo: coches con los faros encendidos que circulan por la derecha y paran en rojo (más tráfico al caer la tarde y casi nada de madrugada, según tu hora real), peatones que esperan en el bordillo y cruzan por el paso de cebra, semáforos en cada cruce, farolas, escaparates, una plaza con quiosco delante de tu portal y, en diciembre, el árbol de la plaza iluminado.
 
 | Objeto | Pilar |
 |---|---|
@@ -177,7 +177,8 @@ winter-arch-shelter/
    │  ├─ room.ts            # suelo, losa del diorama, paredes con hueco de ventana
    │  ├─ objects.ts         # catálogo de objetos y su arte procedural por nivel
    │  ├─ tower.ts           # tu edificio-historial: una planta por semana, una ventana por día
-   │  ├─ city.ts            # ciudad isométrica: manzanas, calles, coches, peatones, farolas, plaza
+   │  ├─ city.ts            # ciudad isométrica: manzanas, calles, farolas, semáforos, plaza; dibuja el tráfico
+   │  ├─ traffic.ts         # tráfico (lógica pura, con tests): carriles, semáforos, coches y peatones
    │  ├─ skyline.ts         # cielo, luna, estrellas y horizonte lejano en 2D con bruma
    │  ├─ lighting.ts        # mapa de luz (multiply), focos, halos, cono del flexo, viñeta
    │  └─ palette.ts         # materiales y ambiente por nivel/fase
@@ -222,10 +223,11 @@ Lo ambiguo se resolvió con la opción más simple; aquí queda anotado:
 12. **Reto semanal**: es una tarea semanal con la etiqueta `boss` en el corcho; su título rota cada lunes. La decoración se ve la semana en que se cumple y la siguiente.
 13. **Campos extra** (opcionales) en los tipos del documento: `Quest.tier/object/unit/tags`, `DayLog.xp/bonus/restDay/tokenUsed/goalSteps/priorityDone`, `arc.bedtime` y `GameState.meta` (último día procesado, semanas ya evaluadas para tokens, último nivel/fase vistos, revisión mostrada, temporizador…). Las partidas antiguas se cargan sin perder nada.
 14. **Archivos extra** respecto al árbol del documento: `src/app.ts`, `engine/audio.ts`, `engine/color.ts`, `engine/random.ts`, `scene/tower.ts`, `scene/skyline.ts`, `ui/dom.ts`, `game/testutil.ts`. `storage.importJSON` recibe el texto del archivo (lo lee la interfaz) para que `game/` siga siendo puro.
-15. **Rendimiento**: el cuarto iluminado se cachea en un lienzo aparte y solo se repinta cuando cambia algo o para las animaciones (a 20 Hz si el equipo va justo). La ciudad se pre-renderiza en sprites ordenados una vez (orden topológico por cajas) y se compone en dos capas, detrás y delante de tu edificio. Cada frame solo se dibujan coches y peatones, y se repinta, recortado a su caja, lo que debe taparlos. El mapa de luz va a media resolución.
+15. **Rendimiento**: el cuarto iluminado se cachea en un lienzo aparte y solo se repinta cuando cambia algo o para las animaciones (a 20 Hz si el equipo va justo). La ciudad se pre-renderiza en sprites ordenados una vez (orden topológico por cajas) y se compone en dos capas, detrás y delante de tu edificio. Cada frame solo se dibujan coches y peatones, y se repinta, recortado a su caja, lo que debe taparlos. El mapa de luz va a media resolución y se recorta con la opacidad del propio cuarto (sin bordes dentados).
 16. **Escena**: la ciudad usa la misma proyección y escala que la habitación (manzanas de 8×8 con calles de 4). Delante de tu edificio solo hay edificios bajos y la plaza, para que nunca tapen tu historial; detrás y a los lados se alzan los altos con bruma por profundidad. El parallax queda solo en el horizonte lejano. El encuadre se calcula para que se vean la habitación, el edificio entero y la acera.
 17. **Mecánicas añadidas tras auditar el prototipo**: periodo de gracia de un día (con devolución de token), pasos diarios hacia las metas, prioridad del día desde el diario, resumen semanal atrasado, edificio-historial y revisión final del arco. Se explican en *Reglas* y las cubre `mechanics.test.ts`.
 18. **Sonido**: activado por defecto en Ajustes, pero no suena nada hasta el primer clic o tecla (política de autoplay).
+19. **Tráfico**: se circula por la derecha. Cada cruce alterna el paso entre los dos ejes (verde 7 s, ámbar 1,5 s, todo rojo 1,5 s) con un desfase propio; las farolas de las esquinas llevan el semáforo de su eje. Los coches siguen al de delante sin solaparse, paran en la línea de detención antes del paso de cebra y solo apuran el ámbar si ya no podrían frenar con suavidad. Los peatones cruzan solo con su verde y si les da tiempo a llegar al otro lado. `traffic.test.ts` comprueba que nadie se salta un rojo, que no hay choques en los cruces y que nadie atropella a un peatón.
 
 ## Criterios de aceptación
 

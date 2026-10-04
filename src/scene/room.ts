@@ -11,26 +11,6 @@ export const SLAB = 0.45;
 /** Hueco de la ventana en la pared derecha (plano y = 0). */
 export const WINDOW = { x0: 1.7, x1: 4.5, z0: 0.95, z1: 2.6 };
 
-/** Silueta exterior del diorama (para clips de luz). */
-export function roomSilhouette(): P2[] {
-  const T = WALL_T, S = ROOM_SIZE;
-  return [
-    p(-T, -T, WALL_H),
-    p(S, -T, WALL_H),
-    p(S, -T, -SLAB),
-    p(S, S, -SLAB),
-    p(-T, S, -SLAB),
-    p(-T, S, WALL_H),
-  ];
-}
-
-export function pathSilhouette(ctx: CanvasRenderingContext2D) {
-  const pts = roomSilhouette();
-  ctx.beginPath();
-  pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-  ctx.closePath();
-}
-
 /** Polígono del hueco de la ventana (en el plano interior de la pared). */
 export function windowHole(): P3[] {
   const { x0, x1, z0, z1 } = WINDOW;
@@ -42,13 +22,6 @@ export function drawFloor(ctx: CanvasRenderingContext2D) {
   // Losa: caras frontales
   fillPoly(ctx, [[-WALL_T, S, -SLAB], [S, S, -SLAB], [S, S, 0], [-WALL_T, S, 0]], MAT.slabLeft);
   fillPoly(ctx, [[S, -WALL_T, -SLAB], [S, S, -SLAB], [S, S, 0], [S, -WALL_T, 0]], MAT.slabRight);
-  // Borde inferior iluminado por la ciudad
-  ctx.strokeStyle = 'rgba(255,190,140,0.18)';
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  const a = p(-WALL_T, S, -SLAB), b = p(S, S, -SLAB), c = p(S, -WALL_T, -SLAB);
-  ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]);
-  ctx.stroke();
 
   // Tarimas a lo largo de x
   const plank = 0.5;

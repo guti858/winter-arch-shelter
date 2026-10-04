@@ -7,6 +7,9 @@ import { BOOK_COLORS, MAT, blanketColor } from './palette';
 import { mulberry32 } from '../engine/random';
 import { WINDOW, WALL_T } from './room';
 
+/** Vela del alféizar: entre el parteluz y la cortina derecha (que tapa x1 ± 0,35). */
+export const CANDLE_X = WINDOW.x1 - 0.8;
+
 export interface Box { x: number; y: number; z: number; w: number; d: number; h: number }
 
 /** Lo que la escena necesita saber del juego para dibujarse. */
@@ -261,10 +264,10 @@ function drawWindow(ctx: CanvasRenderingContext2D, env: SceneEnv) {
   quadY(ctx, 0.0, x0, x1, (z0 + z1) / 2 - 0.025, (z0 + z1) / 2 + 0.025, frame);
   // alféizar interior
   drawBox(ctx, x0 - 0.12, 0, z0 - 0.07, x1 - x0 + 0.24, 0.2, 0.07, '#e4e6f0');
-  // vela/farolillo en el alféizar (nivel 3+)
+  // vela/farolillo en el alféizar (nivel 3+), fuera del alcance de las cortinas
   if (env.level >= 3) {
-    drawBox(ctx, x1 - 0.45, 0.04, z0, 0.16, 0.12, 0.2, '#f3e2c4');
-    dot(ctx, p(x1 - 0.37, 0.1, z0 + 0.1), 1.6, '#fff1c9');
+    drawBox(ctx, CANDLE_X - 0.08, 0.04, z0, 0.16, 0.12, 0.2, '#f3e2c4');
+    dot(ctx, p(CANDLE_X, 0.1, z0 + 0.1), 1.6, '#fff1c9');
   }
   // diario de hoy escrito → libreta en el alféizar
   if (env.journalToday) drawBox(ctx, x0 + 0.15, 0.03, z0, 0.42, 0.14, 0.04, '#c9574b');

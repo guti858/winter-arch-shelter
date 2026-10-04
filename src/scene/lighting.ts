@@ -3,8 +3,8 @@ import { p, pathPoly } from '../engine/iso';
 import { rgba, type RGB } from '../engine/color';
 import type { View } from '../engine/renderer';
 import type { ObjectId } from '../game/state';
-import { ANCHORS, type SceneEnv } from './objects';
-import { pathSilhouette, windowHole, WINDOW } from './room';
+import { ANCHORS, CANDLE_X, type SceneEnv } from './objects';
+import { windowHole, WINDOW } from './room';
 import type { Ambient } from './palette';
 
 export interface Light {
@@ -40,7 +40,7 @@ export function computeLights(env: SceneEnv, amb: Ambient): Light[] {
 
   // Ventana: luz fría de la ciudad que entra + resplandor cálido desde el nivel 3
   L.push({ x: (WINDOW.x0 + WINDOW.x1) / 2, y: 1.6, z: 0, r: 190, color: COLD, intensity: 0.32, flat: true });
-  if (lvl >= 3) L.push({ x: 3.1, y: 0.3, z: 2.4, r: 95, color: warm, intensity: 0.35 * boost, bloom: 14, bloomAt: [WINDOW.x1 - 0.37, 0.1, WINDOW.z0 + 0.12] });
+  if (lvl >= 3) L.push({ x: 3.1, y: 0.3, z: 2.4, r: 95, color: warm, intensity: 0.35 * boost, bloom: 14, bloomAt: [CANDLE_X, 0.1, WINDOW.z0 + 0.12] });
 
   // Flexo del escritorio (nivel 2+)
   if (lvl >= 2) {
@@ -81,6 +81,9 @@ export interface LightFrame { w: number; h: number; ox: number; oy: number; scal
 export class Lighting {
   readonly canvas = document.createElement('canvas');
   private ctx = this.canvas.getContext('2d')!;
+  /** Copia del cuarto antes de iluminarlo: su opacidad recorta el mapa de luz al píxel. */
+  private mask = document.createElement('canvas');
+  private maskCtx = this.mask.getContext('2d')!;
   /** Resolución del mapa de luz respecto a px CSS (la luz es suave: media resolución basta). */
   private res = 0.5;
 
@@ -94,14 +97,13 @@ export class Lighting {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    // Sin recortar a la silueta: a media resolución el recorte deja un borde dentado sin oscurecer
+    // en lo alto de las paredes. La forma exacta la pone la máscara del propio cuarto en apply().
+    ctx.fillStyle = rgba(ambient, 1);
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     const k = this.res;
     ctx.setTransform(frame.scale * k, 0, 0, frame.scale * k, frame.ox * k, frame.oy * k);
     ctx.save();
-    pathSilhouette(ctx);
-    ctx.clip();
-    ctx.fillStyle = rgba(ambient, 1);
-    pathSilhouette(ctx);
-    ctx.fill();
     ctx.globalCompositeOperation = 'lighter';
     for (const l of lights) {
       if (l.intensity <= 0) continue;
@@ -131,19 +133,32 @@ export class Lighting {
       ctx.fillRect(x - 90, -200, 180, 600);
     }
     ctx.restore();
-    // el hueco de la ventana deja ver la ciudad sin oscurecer
-    ctx.globalCompositeOperation = 'destination-out';
+    // el hueco de la ventana (cristal y marco) no se oscurece: blanco = multiplicar por 1
+    ctx.fillStyle = '#ffffff';
     pathPoly(ctx, windowHole());
     ctx.fill();
-    ctx.globalCompositeOperation = 'source-over';
   }
 
-  /** Multiplica el mapa de luz sobre el lienzo destino (cuyo transform se ignora). */
+  /**
+   * Multiplica el mapa de luz sobre el lienzo destino (cuyo transform se ignora) y le devuelve su
+   * opacidad original: así se ilumina todo lo dibujado, también lo que sobresale de la silueta.
+   */
   apply(target: CanvasRenderingContext2D, frame: LightFrame, dpr: number) {
+    const src = target.canvas, m = this.mask, mc = this.maskCtx;
+    if (m.width !== src.width || m.height !== src.height) {
+      m.width = src.width;
+      m.height = src.height;
+    }
+    mc.setTransform(1, 0, 0, 1, 0, 0);
+    mc.globalCompositeOperation = 'copy';
+    mc.drawImage(src, 0, 0);
     target.save();
     target.setTransform(dpr, 0, 0, dpr, 0, 0);
     target.globalCompositeOperation = 'multiply';
     target.drawImage(this.canvas, 0, 0, frame.w, frame.h);
+    target.setTransform(1, 0, 0, 1, 0, 0);
+    target.globalCompositeOperation = 'destination-in';
+    target.drawImage(m, 0, 0);
     target.restore();
   }
 
