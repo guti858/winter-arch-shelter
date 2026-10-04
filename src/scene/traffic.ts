@@ -157,7 +157,8 @@ export class Traffic {
           ? [[base + 1.4, -1], [base + 2.6, 1]]
           : [[base + 1.4, 1], [base + 2.6, -1]];
         for (const [lane, dir] of lanes) {
-          const n = 2 + Math.floor(rnd() * 2);
+          // como mucho 4 por carril: una cola en un semáforo nunca llega hasta el cruce anterior
+          const n = 3 + Math.floor(rnd() * 2);
           const list: Mover[] = [];
           for (let c = 0; c < n; c++) {
             const van = rnd() < 0.15;
@@ -165,8 +166,8 @@ export class Traffic {
               kind: 'car', axis, lane, band: g, dir,
               pos: MIN + ((c + 0.15 + rnd() * 0.7) * SPAN) / n,
               v: 0, vmax: 1.6 + rnd() * 1.1,
-              len: van ? 1.3 : 0.95, wid: van ? 0.5 : 0.46, h: van ? 0.62 : 0.47,
-              color: shade(pick(CARS), -0.35), rank: rnd(), visible: true, brake: false, stride: 0,
+              len: van ? 1.5 : 1.15, wid: van ? 0.58 : 0.54, h: van ? 0.7 : 0.54,
+              color: shade(pick(CARS), -0.12), rank: rnd(), visible: true, brake: false, stride: 0,
               van, snow: rnd() < 0.5,
             });
           }
@@ -210,19 +211,19 @@ export class Traffic {
     this.clock += dt;
     const dens = trafficDensity(hour);
     if (!this.primed) {
-      for (const m of this.movers) m.visible = m.rank < this.density(m, dens);
+      // la densidad se aplica desde el primer frame, sin dejar a nadie encima de otro
+      for (const m of this.movers) m.visible = false;
+      for (const lane of this.lanes) for (const m of lane) m.visible = m.rank < this.density(m, dens) && this.clear(lane, m);
       this.primed = true;
     }
     for (const lane of this.lanes) {
       const vis = lane.filter((m) => m.visible).sort((a, b) => (a.pos - b.pos) * a.dir);
       vis.forEach((m, i) => {
         let gap = Infinity;
-        if (vis.length > 1) {
-          const lead = vis[(i + 1) % vis.length];
-          gap = ring((lead.pos - m.pos) * m.dir) - (lead.len + m.len) / 2 - (m.kind === 'car' ? CAR_GAP : WALK_GAP);
-        }
+        const lead = vis.length > 1 ? vis[(i + 1) % vis.length] : undefined;
+        if (lead) gap = ring((lead.pos - m.pos) * m.dir) - (lead.len + m.len) / 2 - (m.kind === 'car' ? CAR_GAP : WALK_GAP);
         if (m.kind === 'car') {
-          gap = Math.min(gap, this.stopGap(m));
+          gap = Math.min(gap, this.stopGap(m, lead, gap));
           const want = Math.min(m.vmax, Math.sqrt(2 * DECEL * Math.max(0, gap)));
           const prev = m.v;
           m.v = want < m.v ? want : Math.min(want, m.v + ACCEL * dt);
@@ -255,21 +256,26 @@ export class Traffic {
   }
 
   /** Distancia hasta donde debe parar por el semáforo (Infinity si puede seguir). */
-  private stopGap(m: Mover): number {
+  private stopGap(m: Mover, lead: Mover | undefined, leadGap: number): number {
     const { n, line } = nextStopLine(m);
     if (n < BANDS.from || n > BANDS.to) return Infinity;
     if (m.pass === n) return Infinity;
     const dist = (line - (m.pos + (m.dir * m.len) / 2)) * m.dir;
+    // no entra en el cruce si el de delante está parado justo a la salida y no cabría
+    const room = !lead || lead.v > 0.3 || leadGap >= dist + (STOP_NEG - STOP_POS) + m.len;
+    if (!room) return dist - 0.02;
     const [ix, iy] = crossingOf(m, n);
     const u = axisPhase(ix, iy, m.axis, this.clock);
     // se compromete a pasar cuando ya no podría parar con suavidad (o arranca desde la línea);
-    // en ámbar, solo si va lanzado y llega a la línea antes del rojo
+    // en ámbar, solo si va lanzado, llega a la línea antes del rojo y deja el cruce (pasos de cebra
+    // incluidos) vacío antes de que acabe el todo rojo
     const late = (m.v * m.v) / (2 * DECEL) >= dist - 0.02;
+    const clears = (dist + STOP_NEG - STOP_POS + m.len) / Math.max(m.v, 0.01) <= HALF - u;
     if (u < GREEN) {
       if (late || dist < 0.3) m.pass = n;
       return Infinity;
     }
-    if (u < GREEN + AMBER && late && m.v > 0.5 && dist < m.v * (GREEN + AMBER - u)) {
+    if (u < GREEN + AMBER && late && m.v > 0.5 && dist < m.v * (GREEN + AMBER - u) && clears) {
       m.pass = n;
       return Infinity;
     }

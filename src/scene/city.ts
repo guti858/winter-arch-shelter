@@ -633,13 +633,18 @@ export class City {
     const c = p(at[0], at[1], at[2]);
     ctx.save();
     ctx.transform(alongX ? TW / 2 : -TW / 2, TH / 2, 0, -TZ, c[0], c[1]);
+    // neumático oscuro con llanta clara: se lee como rueda aunque el coche se vea pequeño
     ctx.fillStyle = '#0b0c14';
     ctx.beginPath();
-    ctx.arc(0, 0, 0.09, 0, Math.PI * 2);
+    ctx.arc(0, 0, 0.11, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#aab0c8';
+    ctx.beginPath();
+    ctx.arc(0, 0, 0.055, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#4a4e66';
     ctx.beginPath();
-    ctx.arc(0, 0, 0.036, 0, Math.PI * 2);
+    ctx.arc(0, 0, 0.022, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -684,14 +689,14 @@ export class City {
     ctx.restore();
 
     // ruedas del costado oculto (asoman bajo la carrocería)
-    const axle = (u1 - u0) / 2 - 0.2;
-    for (const du of [-axle, axle]) this.wheel(ctx, P(cu + du, w0 + 0.03, z + 0.09), ax);
+    const axle = (u1 - u0) / 2 - 0.25;
+    for (const du of [-axle, axle]) this.wheel(ctx, P(cu + du, w0 + 0.04, z + 0.11), ax);
     // carrocería y habitáculo (retrasado respecto a la marcha; en la furgoneta, casi todo el largo)
-    const zb = z + 0.1, hb = m.van ? 0.3 : 0.2;
+    const zb = z + 0.12, hb = m.van ? 0.36 : 0.22;
     box(u0, w0, zb, u1 - u0, w1 - w0, hb, m.color);
-    const cl = m.van ? u1 - u0 - 0.32 : 0.5;
-    const ca = m.van ? (m.dir > 0 ? u0 + 0.04 : u1 - 0.04 - cl) : cu - cl / 2 - m.dir * 0.06;
-    const cw0 = w0 + 0.04, cw1 = w1 - 0.04, ch0 = zb + hb, ch = m.van ? 0.2 : 0.16;
+    const cl = m.van ? u1 - u0 - 0.36 : 0.6;
+    const ca = m.van ? (m.dir > 0 ? u0 + 0.04 : u1 - 0.04 - cl) : cu - cl / 2 - m.dir * 0.07;
+    const cw0 = w0 + 0.05, cw1 = w1 - 0.05, ch0 = zb + hb, ch = m.van ? 0.22 : 0.19;
     const cabin = shade(m.color, 0.12);
     box(ca, cw0, ch0, cl, cw1 - cw0, ch, cabin);
     // cristales: ventanillas en el costado visible y parabrisas (o luna trasera) en el extremo visible
@@ -703,7 +708,7 @@ export class City {
     endFace(ca + cl + 0.003, cw0 + 0.06, cw0 + 0.11, g0 + 0.01, g1 - 0.01, 'rgba(170,200,255,0.25)');
     if (m.snow) fillPoly(ctx, quad(ca + 0.04, ca + cl - 0.04, cw0 + 0.03, cw1 - 0.03, ch0 + ch + 0.001), 'rgba(225,235,255,0.72)');
     // faros si viene hacia ti; pilotos (más vivos al frenar) si se aleja
-    const lz0 = zb + hb - 0.09, lz1 = zb + hb - 0.03;
+    const lz0 = zb + hb - 0.1, lz1 = zb + hb - 0.03;
     const lamp = m.dir > 0 ? '#fff4d6' : m.brake ? '#ff3b30' : '#a3262c';
     for (const [wa, wb] of [[w0 + 0.04, w0 + 0.12], [w1 - 0.12, w1 - 0.04]]) endFace(u1 + 0.002, wa, wb, lz0, lz1, lamp);
     if (m.dir > 0 || m.brake) {
@@ -719,7 +724,7 @@ export class City {
       ctx.restore();
     }
     // ruedas del costado visible
-    for (const du of [-axle, axle]) this.wheel(ctx, P(cu + du, w1 + 0.005, z + 0.09), ax);
+    for (const du of [-axle, axle]) this.wheel(ctx, P(cu + du, w1 + 0.005, z + 0.11), ax);
   }
 
   private drawWalker(ctx: CanvasRenderingContext2D, m: Mover, b: AABB) {
