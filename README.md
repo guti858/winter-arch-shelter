@@ -27,8 +27,16 @@ npm run dev        # http://localhost:5173
 | `npm test` | Tests unitarios de la lógica de juego (Vitest) |
 | `npm run simulate` | Simula un arco completo de 88 días e imprime rachas, tokens, XP y nivel por semana |
 | `npm run typecheck` | Solo TypeScript |
+| `npm run build:artifact` | Build de un solo archivo (`dist/winter-arc-room.html`) |
 
 El build es estático: `dist/` se puede servir desde cualquier hosting de ficheros.
+
+### Abrirlo sin instalar nada
+
+`npm run build:artifact` genera `dist/winter-arc-room.html`: el juego entero en un solo archivo (JS y CSS en línea, ~155 KB), que se puede subir a cualquier hosting estático o publicar como artifact de claude.ai. Dentro del visor de claude.ai el juego se integra solo (`src/platform/claude.ts`; fuera de ese visor no hace nada):
+
+- guarda además una copia **privada** de la partida en tu cuenta (`data/users/<id>/partida`), así el progreso no depende del navegador y te sigue entre dispositivos (gana la copia más reciente);
+- *Exportar JSON* usa el guardado de archivos del visor, porque allí los enlaces de descarga están bloqueados. También están *Copiar JSON* y *Pegar JSON*.
 
 ## Cómo se juega
 
@@ -95,9 +103,9 @@ El build es estático: `dist/` se puede servir desde cualquier hosting de ficher
 ## Tus datos
 
 - Se guardan **solo en tu navegador** (`localStorage`, clave `winterArcRoom.v1`), con guardado automático 300 ms después de cada cambio.
-- **Ajustes → Exportar JSON** descarga una copia; **Importar JSON** la restaura (se valida la versión y la estructura).
+- **Ajustes → Exportar JSON** descarga una copia (o **Copiar JSON** al portapapeles); **Importar archivo** o **Pegar JSON** la restaura (se valida la versión y la estructura).
 - Si `localStorage` no está disponible (p. ej. modo privado), el juego funciona en memoria y muestra un aviso.
-- **Ajustes → Reiniciar arco** borra todo tras una doble confirmación.
+- **Ajustes → Reiniciar arco** borra todo tras una doble confirmación dentro de la propia página.
 
 ## Editar las tareas (`src/content/quests.json`)
 
@@ -152,8 +160,10 @@ winter-arch-shelter/
 ├─ index.html
 ├─ package.json · tsconfig.json · vite.config.ts
 ├─ docs/                    # capturas para este README (el juego no usa imágenes)
+├─ scripts/build-artifact.mjs # genera la versión de un solo archivo
 └─ src/
    ├─ main.ts               # arranque: almacenamiento + controlador
+   ├─ platform/claude.ts    # integración opcional con el visor de artifacts de claude.ai
    ├─ app.ts                # controlador: estado ↔ escena ↔ interfaz, bucle, eventos, depuración
    ├─ engine/
    │  ├─ iso.ts             # proyección 2:1, drawBox/drawCylinder, depth sort, envolventes, picking

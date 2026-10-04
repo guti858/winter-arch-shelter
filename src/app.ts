@@ -34,6 +34,8 @@ export class App {
   readonly modals: Modals;
   readonly sfx = new Sfx();
   hovered: ObjectId | null = null;
+  /** El progreso se sincroniza además con la cuenta de Claude (al abrirse como artifact). */
+  cloudSync = false;
   /** Desfase del reloj (consola de depuración: __debug.setDay). */
   private timeOffset = 0;
   private pointer: PointerState;
@@ -115,6 +117,16 @@ export class App {
     }
     this.render();
     requestAnimationFrame((t) => this.loop(t));
+  }
+
+  /** Sustituye la partida en curso (importación o copia sincronizada más reciente). */
+  loadState(state: GameState) {
+    if (this.modals.isOpen()) this.modals.close(true);
+    this.state = state;
+    this.applyReducedMotionClass();
+    this.sfx.setEnabled(state.settings.sound);
+    this.checkDay(true);
+    this.afterChange();
   }
 
   /** Crea la partida al terminar la pantalla de inicio. */

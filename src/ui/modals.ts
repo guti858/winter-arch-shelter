@@ -6,7 +6,7 @@ import { applyAdjustment, arcReview, arcWeeks, computeStreak, weekSummary, type 
 import { levelFor } from '../game/progression';
 import { exportJSON, importJSON } from '../game/storage';
 import { createState, PILLAR_DEFS, pillarDef, questsForIntensity, QUEST_TEMPLATE, questTitle, type Intensity } from '../game/state';
-import { download, el, esc } from './dom';
+import { copyText, download, el, esc } from './dom';
 
 type Cleanup = () => void;
 
@@ -280,9 +280,17 @@ export class Modals {
       <p class="lead" style="margin:0 0 8px">Todo se guarda solo en este navegador. Exporta una copia de vez en cuando.</p>
       <div class="q-controls">
         <button class="btn" data-export>⬇ Exportar JSON</button>
-        <button class="btn" data-import>⬆ Importar JSON</button>
+        <button class="btn" data-copy>⧉ Copiar JSON</button>
+        <button class="btn" data-import>⬆ Importar archivo</button>
+        <button class="btn" data-paste-open>⎘ Pegar JSON</button>
         <input type="file" accept="application/json,.json" data-file hidden>
       </div>
+      <div data-paste-zone hidden>
+        <label class="lbl" for="paste-json">Pega aquí una copia exportada</label>
+        <textarea class="field" id="paste-json" rows="4" spellcheck="false"></textarea>
+        <div class="q-controls" style="margin-top:8px"><button class="btn" data-paste>Importar lo pegado</button></div>
+      </div>
+      ${this.app.cloudSync ? '<p class="lead" style="margin:8px 0 0;font-size:12.5px">☁️ Tu progreso también se guarda, en privado, en tu cuenta de Claude.</p>' : ''}
       <div class="note" data-msg hidden></div>
       <div class="section-title">Zona delicada</div>
       <div data-reset-zone><button class="btn danger" data-reset>Reiniciar arco…</button></div>
@@ -309,7 +317,16 @@ export class Modals {
         download(`winter-arc-room-${this.app.today}.json`, exportJSON(this.app.state!));
         this.msg(m, 'Copia exportada.');
       }
+      if (t.closest('[data-copy]')) {
+        copyText(exportJSON(this.app.state!)).then((ok) => this.msg(m, ok ? 'Copia en el portapapeles. Guárdala donde quieras.' : 'No se pudo copiar. Usa Exportar JSON.', !ok));
+      }
       if (t.closest('[data-import]')) m.querySelector<HTMLInputElement>('[data-file]')!.click();
+      if (t.closest('[data-paste-open]')) {
+        const zone = m.querySelector<HTMLElement>('[data-paste-zone]')!;
+        zone.hidden = false;
+        zone.querySelector('textarea')!.focus();
+      }
+      if (t.closest('[data-paste]')) this.importText(m, (m.querySelector('#paste-json') as HTMLTextAreaElement).value);
       if (t.closest('[data-reset]')) {
         m.querySelector('[data-reset-zone]')!.innerHTML = `<div class="note" style="border-color:var(--danger)"><b>¿Seguro?</b> Se borrará todo el progreso (XP, rachas, diario). Exporta antes si quieres conservarlo.
           <div class="q-controls" style="margin-top:10px"><button class="btn danger" data-reset2>Sí, borrar todo</button><button class="btn" data-reset-cancel>Cancelar</button></div></div>`;
@@ -317,10 +334,7 @@ export class Modals {
       if (t.closest('[data-reset-cancel]')) {
         m.querySelector('[data-reset-zone]')!.innerHTML = `<button class="btn danger" data-reset>Reiniciar arco…</button>`;
       }
-      if (t.closest('[data-reset2]')) {
-        if (!window.confirm('Última confirmación: ¿borrar el arco y empezar de cero?')) return;
-        this.resetArc();
-      }
+      if (t.closest('[data-reset2]')) this.resetArc();
     });
     m.querySelector<HTMLInputElement>('[data-bedtime]')!.addEventListener('change', (e) => {
       const v = (e.target as HTMLInputElement).value;
@@ -328,20 +342,19 @@ export class Modals {
     });
     m.querySelector<HTMLInputElement>('[data-file]')!.addEventListener('change', async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      try {
-        const state = importJSON(await file.text());
-        this.app.state = state;
-        this.app.applyReducedMotionClass();
-        this.app.sfx.setEnabled(state.settings.sound);
-        this.app.checkDay(true);
-        this.app.afterChange();
-        this.close(true);
-        this.app.hud.toast('Datos importados correctamente.');
-      } catch (err) {
-        this.msg(m, `No se pudo importar: ${(err as Error).message}`, true);
-      }
+      if (file) this.importText(m, await file.text());
     });
+  }
+
+  private importText(m: HTMLElement, text: string) {
+    try {
+      const state = importJSON(text);
+      this.close(true);
+      this.app.loadState(state);
+      this.app.hud.toast('Datos importados correctamente.');
+    } catch (err) {
+      this.msg(m, `No se pudo importar: ${(err as Error).message}`, true);
+    }
   }
 
   private msg(m: HTMLElement, text: string, error = false) {

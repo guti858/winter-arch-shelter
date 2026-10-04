@@ -81,6 +81,7 @@ export interface GameState {
     debugXp?: number; // XP añadido desde la consola de depuración
     tokenWeeks?: string[]; // semanas (lunes) ya evaluadas para ganar token
     reviewShown?: boolean; // revisión final del arco ya mostrada
+    savedAt?: number; // epoch ms del último guardado (para sincronizar copias)
   };
 }
 

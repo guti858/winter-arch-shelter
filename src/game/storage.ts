@@ -49,6 +49,7 @@ export function validateState(raw: unknown): GameState {
       debugXp: s.meta?.debugXp,
       tokenWeeks: Array.isArray(s.meta?.tokenWeeks) ? s.meta!.tokenWeeks : undefined,
       reviewShown: s.meta?.reviewShown,
+      savedAt: typeof s.meta?.savedAt === 'number' ? s.meta.savedAt : undefined,
     },
   };
   mergeTemplate(state);
@@ -78,6 +79,10 @@ export class Store {
   private memory: string | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private pending: GameState | null = null;
+  /** Se llama tras cada guardado efectivo (p. ej. para sincronizar una copia en otro sitio). */
+  onFlush: ((state: GameState, text: string) => void) | null = null;
+  /** Se llama al borrar la partida. */
+  onClear: (() => void) | null = null;
 
   constructor(private backend: Storage | null) {
     this.available = Store.probe(backend);
@@ -96,7 +101,14 @@ export class Store {
   }
 
   load(): GameState | null {
-    const text = this.available ? this.backend!.getItem(STORAGE_KEY) : this.memory;
+    let text: string | null = this.memory;
+    if (this.available) {
+      try {
+        text = this.backend!.getItem(STORAGE_KEY);
+      } catch {
+        text = this.memory;
+      }
+    }
     if (!text) return null;
     try {
       return importJSON(text);
@@ -107,6 +119,7 @@ export class Store {
 
   /** Guardado con debounce de 300 ms. */
   save(state: GameState) {
+    state.meta.savedAt = Date.now();
     this.pending = state;
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => this.flush(), SAVE_DEBOUNCE_MS);
@@ -116,23 +129,33 @@ export class Store {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     if (!this.pending) return;
-    const text = JSON.stringify(this.pending);
+    const state = this.pending;
+    const text = JSON.stringify(state);
     this.pending = null;
+    let stored = false;
     if (this.available) {
       try {
         this.backend!.setItem(STORAGE_KEY, text);
-        return;
+        stored = true;
       } catch {
         // cuota llena u otro fallo: seguimos en memoria
       }
     }
-    this.memory = text;
+    if (!stored) this.memory = text;
+    this.onFlush?.(state, text);
   }
 
   clear() {
     this.pending = null;
     if (this.timer) clearTimeout(this.timer);
     this.memory = null;
-    if (this.available) this.backend!.removeItem(STORAGE_KEY);
+    if (this.available) {
+      try {
+        this.backend!.removeItem(STORAGE_KEY);
+      } catch {
+        // nada que borrar
+      }
+    }
+    this.onClear?.();
   }
 }
