@@ -1,12 +1,12 @@
 // Controlador: une el estado del juego (game/), la escena (engine/ + scene/) y la interfaz (ui/).
 import { createInput, type PointerState } from './engine/input';
-import { pick, Renderer } from './engine/renderer';
+import { pick, pickFloor, Renderer } from './engine/renderer';
 import type { SceneEnv } from './scene/objects';
-import { addDays, arcInfo, logicalDate, weekStart, type ArcInfo } from './game/calendar';
+import { addDays, arcInfo, diffDays, logicalDate, prettyDate, weekStart, type ArcInfo } from './game/calendar';
 import { allObjectMeters, allPillarMeters, LEVEL_UNLOCKS, levelFor, levelProgress, thresholds, type LevelProgress } from './game/progression';
-import { activeQuests, bossDecor, isQuestDone, journalQuest, minimumStatus, tickTimer, type GameEvent, type MinimumStatus } from './game/quests';
-import { computeStreak, settle, shouldAutoSummary, shouldShowReentry } from './game/streaks';
-import { OBJECTS, PILLARS, questObject, type GameState, type ObjectId, type PillarId } from './game/state';
+import { activeQuests, bossDecor, goalStepCount, incrementQuest, isQuestDone, journalQuest, minimumStatus, setQuestDone, tickTimer, toggleGoalStep, type GameEvent, type MinimumStatus } from './game/quests';
+import { arcWeeks, computeStreak, dayLight, recheckWeekToken, reviewDue, settle, shouldShowReentry, summaryDue } from './game/streaks';
+import { hasTag, OBJECTS, PILLARS, questObject, type GameState, type ObjectId, type PillarId } from './game/state';
 import type { Store } from './game/storage';
 import { Hud } from './ui/hud';
 import { Panel, type PanelTarget } from './ui/panel';
@@ -162,6 +162,7 @@ export class App {
     }
     this.panel.updateTimers();
     this.hud.updateTimer();
+    this.env.hour = this.hourNow();
     if (this.computeToday() !== this.today) this.checkDay();
   }
 
@@ -180,9 +181,14 @@ export class App {
       this.state.meta.reentryShown = today;
       this.modals.enqueue(() => this.modals.message('Hola de nuevo', 'Cuenta como día 1. La habitación sigue como la dejaste.', '❄️'));
     }
-    if (shouldAutoSummary(this.state, today)) {
-      this.state.meta.lastSummaryWeek = weekStart(today);
-      this.modals.enqueue(() => this.modals.summary());
+    const due = summaryDue(this.state, today);
+    if (due !== null) {
+      this.state.meta.lastSummaryWeek = addDays(weekStart(today), -7 * due);
+      this.modals.enqueue(() => this.modals.summary(due));
+    }
+    if (reviewDue(this.state, today)) {
+      this.state.meta.reviewShown = true;
+      this.modals.enqueue(() => this.modals.review());
     }
     this.checkPhase();
     this.save();
@@ -191,11 +197,14 @@ export class App {
 
   // ------------------------------------------------------------------ acciones
 
-  /** Aplica una mutación de juego y procesa sus eventos. */
-  act(fn: (s: GameState, today: string) => GameEvent[] | void, origin?: ObjectId) {
+  /** Aplica una mutación de juego (hoy, o ayer en el periodo de gracia) y procesa sus eventos. */
+  act(fn: (s: GameState, date: string) => GameEvent[] | void, origin?: ObjectId, date = this.today) {
     if (!this.state) return;
-    const ev = fn(this.state, this.today) || [];
+    const ev = fn(this.state, date) || [];
     this.handleEvents(ev, origin);
+    if (date !== this.today && recheckWeekToken(this.state, this.today)) {
+      this.hud.toast('❄️ Con lo de ayer, la semana pasada llega a 5 días: ganas un token de descanso.', 'ice');
+    }
     this.afterChange();
   }
 
@@ -247,6 +256,23 @@ export class App {
           if (e.kind === 'work') this.hud.toast(e.questId?.includes('pomodoro') ? '⏱ Bloque completado. Descanso de 5 minutos.' : '⏱ Tiempo cumplido.');
           else this.hud.toast('☕ Fin del descanso. ¿Otro bloque?', 'ice');
           this.sfx.play('bell');
+          break;
+        case 'goalStep':
+          if (e.on) {
+            const [x, y] = this.renderer.anchorOf('corkboard');
+            this.renderer.particles.burst(x, y, 18);
+            this.flash('corkboard');
+          }
+          break;
+        case 'priority':
+          if (e.done) {
+            this.hud.toast('🎯 <b>Prioridad del día cumplida.</b> Lo importante, primero.');
+            this.flash('window');
+            this.sfx.play('chime');
+          }
+          break;
+        case 'tokenRefund':
+          this.hud.toast('❄️ Completaste ese día a tiempo: <b>recuperas el token</b> de descanso.', 'ice');
           break;
         case 'uncomplete':
           break;
@@ -319,7 +345,16 @@ export class App {
       meters: this.derived.pillars,
       glow: objects,
       flash,
-      goals: s.goals.map((g) => ({ text: g.text, done: g.done })),
+      goals: s.goals.map((g) => ({ text: g.text, done: g.done, steps: goalStepCount(s, g.id) })),
+      hour: this.hourNow(),
+      tower: {
+        weeks: arcWeeks(s).map((ws) => ({
+          ws,
+          phase: arcInfo(s.arc, ws < s.arc.start ? s.arc.start : ws).phase,
+          lights: [0, 1, 2, 3, 4, 5, 6].map((i) => dayLight(s, addDays(ws, i), today)),
+          current: ws === weekStart(today),
+        })),
+      },
       bossDecor: bossDecor(s, today),
       timerRunning: !!s.meta.timer && s.meta.timer.kind === 'work',
       journalToday: !!jq && isQuestDone(s, jq, today),
@@ -341,7 +376,14 @@ export class App {
     return {
       level: 1, phase: 1, t: this.env?.t ?? 0, meters: zeroP, glow: zeroO, flash: {}, goals: [],
       bossDecor: null, timerRunning: false, journalToday: false, reducedMotion: this.systemReducedMotion,
+      hour: this.hourNow(), tower: { weeks: [] },
     };
+  }
+
+  /** Hora real (con el desfase de depuración): la ciudad tiene más tráfico a última hora de la tarde. */
+  hourNow(): number {
+    const d = new Date(this.now());
+    return d.getHours() + d.getMinutes() / 60;
   }
 
   /** Progreso de hoy de un objeto (para tooltip y dock). */
@@ -368,19 +410,46 @@ export class App {
   // ------------------------------------------------------------------ escena
 
   private onPointerMove(s: PointerState) {
-    const target = s.inside && this.state && !this.modals.isOpen() ? pick(this.renderer.view, this.env, s.x, s.y) : null;
-    if (target !== this.hovered) {
-      this.hovered = target;
-      this.canvas.style.cursor = target ? 'pointer' : 'default';
-    }
-    this.hud.tooltip(target, s.x, s.y);
+    const active = s.inside && this.state && !this.modals.isOpen();
+    const target = active ? pick(this.renderer.view, this.env, s.x, s.y) : null;
+    const floor = active && !target ? this.floorAt(s.x, s.y) : null;
+    if (target !== this.hovered) this.hovered = target;
+    this.renderer.hoveredFloor = floor;
+    this.canvas.style.cursor = target || floor !== null ? 'pointer' : 'default';
+    if (floor !== null) this.hud.tooltipHtml(this.floorTooltip(floor), s.x, s.y);
+    else this.hud.tooltip(target, s.x, s.y);
   }
 
   private onTap(s: PointerState) {
     if (!this.state || this.modals.isOpen()) return;
     const target = pick(this.renderer.view, this.env, s.x, s.y);
-    if (target) this.openObject(target);
-    else if (this.panel.current) this.panel.close();
+    if (target) {
+      this.openObject(target);
+      return;
+    }
+    const floor = this.floorAt(s.x, s.y);
+    if (floor !== null) {
+      const ws = this.env.tower.weeks[floor].ws;
+      this.modals.summary(diffDays(ws, weekStart(this.today)) / 7);
+      return;
+    }
+    if (this.panel.current) this.panel.close();
+  }
+
+  /** Planta del edificio-historial bajo el puntero (0 = semana 1). */
+  private floorAt(x: number, y: number): number | null {
+    const weeks = this.env.tower.weeks.length;
+    return weeks ? pickFloor(this.renderer.view, weeks, x, y) : null;
+  }
+
+  private floorTooltip(k: number): string {
+    const w = this.env.tower.weeks[k];
+    const valid = w.lights.filter((l) => l === 'lit' || l === 'bright').length;
+    const rest = w.lights.filter((l) => l === 'rest').length;
+    const future = w.lights.every((l) => l === 'future' || l === 'none');
+    const range = `${prettyDate(w.ws)} – ${prettyDate(addDays(w.ws, 6))}`;
+    const detail = future ? 'aún por construir' : `${valid}/7 días con el mínimo${rest ? ` · ${rest} de descanso` : ''}${w.current ? ' · en curso' : ''}`;
+    return `<b>🏢 Planta ${k + 1} · semana ${k + 1}</b> <span class="sub">· ${range} · ${detail}</span>`;
   }
 
   openObject(target: PanelTarget) {
@@ -422,9 +491,26 @@ export class App {
         app.resetClock();
         return `Hoy: ${app.today}`;
       },
+      /** Rellena los días pasados del arco con un cumplimiento aproximado (0..1) para ver el edificio. */
+      fillHistory(adherence = 0.75) {
+        const s = app.state;
+        if (!s) return;
+        for (let d = s.arc.start; d < app.today; d = addDays(d, 1)) {
+          if (s.log[d]?.minimumMet) continue;
+          for (const q of activeQuests(s, d)) {
+            if (q.kind !== 'daily' || Math.random() >= adherence) continue;
+            if (q.mode === 'counter') incrementQuest(s, q.id, d, q.target ?? 1);
+            else if (hasTag(q, 'goalstep') && s.goals[0]) toggleGoalStep(s, s.goals[0].id, d);
+            else setQuestDone(s, q.id, d, true);
+          }
+        }
+        settle(s, app.today);
+        app.afterChange();
+        return `XP ${s.xp} · racha ${computeStreak(s, app.today)}`;
+      },
       today: () => app.today,
       state: () => app.state,
-      help: () => 'addXp(n) · setLevel(n) · setDay(n) · resetDay() · today() · state()',
+      help: () => 'addXp(n) · setLevel(n) · setDay(n) · resetDay() · fillHistory(0..1) · today() · state()',
     };
     (window as unknown as { __debug: typeof debug }).__debug = debug;
   }

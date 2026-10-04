@@ -47,6 +47,8 @@ export function validateState(raw: unknown): GameState {
       reentryShown: s.meta?.reentryShown,
       timer: s.meta?.timer ?? null,
       debugXp: s.meta?.debugXp,
+      tokenWeeks: Array.isArray(s.meta?.tokenWeeks) ? s.meta!.tokenWeeks : undefined,
+      reviewShown: s.meta?.reviewShown,
     },
   };
   mergeTemplate(state);

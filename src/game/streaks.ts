@@ -1,7 +1,7 @@
 // Rachas, tokens de descanso, "día malo" (modo reducido), reentrada y resumen semanal.
-import { addDays, arcInfo, weekDays, weekStart, weekday } from './calendar';
-import { activeQuests, isQuestDone, questGoal, questProgress, recomputeDay, type GameEvent } from './quests';
-import { MAX_TOKENS, dayLog, peekDay, questTitle, type GameState, type Quest } from './state';
+import { addDays, arcInfo, diffDays, weekDays, weekStart, weekday } from './calendar';
+import { activeQuests, goalStepCount, isQuestDone, questGoal, questProgress, recomputeDay, type GameEvent } from './quests';
+import { MAX_TOKENS, PILLARS, dayLog, peekDay, questTitle, type GameState, type PillarId, type Quest } from './state';
 
 export const TOKEN_WEEK_THRESHOLD = 5; // días válidos en una semana para ganar un token
 export const REENTRY_DAYS = 3;
@@ -57,6 +57,7 @@ export interface SettleResult {
  */
 export function settle(state: GameState, today: string): SettleResult {
   const res: SettleResult = { tokensEarned: 0, tokensUsedOn: [] };
+  ensureTokenWeeks(state);
   const yesterday = addDays(today, -1);
   let from = state.arc.start > state.meta.createdAt ? state.arc.start : state.meta.createdAt;
   if (state.meta.lastSettled && addDays(state.meta.lastSettled, 1) > from) from = addDays(state.meta.lastSettled, 1);
@@ -67,13 +68,46 @@ export function settle(state: GameState, today: string): SettleResult {
       state.restTokens--;
       res.tokensUsedOn.push(d);
     }
-    if (weekday(d) === 6 && validDaysInWeek(state, weekStart(d)) >= TOKEN_WEEK_THRESHOLD && state.restTokens < MAX_TOKENS) {
-      state.restTokens++;
-      res.tokensEarned++;
-    }
+    if (weekday(d) === 6 && awardWeekToken(state, weekStart(d))) res.tokensEarned++;
   }
   if (!state.meta.lastSettled || yesterday > state.meta.lastSettled) state.meta.lastSettled = yesterday;
   return res;
+}
+
+/** Partidas antiguas: las semanas ya procesadas cuentan como evaluadas. */
+function ensureTokenWeeks(state: GameState) {
+  if (state.meta.tokenWeeks) return;
+  const weeks: string[] = [];
+  const last = state.meta.lastSettled;
+  if (last) for (let ws = weekStart(state.meta.createdAt); addDays(ws, 6) <= last; ws = addDays(ws, 7)) weeks.push(ws);
+  state.meta.tokenWeeks = weeks;
+}
+
+/** Evalúa una semana cerrada una sola vez: con ≥5 días válidos, +1 token (máx. 2). */
+function awardWeekToken(state: GameState, ws: string): boolean {
+  const done = state.meta.tokenWeeks!;
+  if (done.includes(ws) || validDaysInWeek(state, ws) < TOKEN_WEEK_THRESHOLD) return false;
+  done.push(ws);
+  if (done.length > 30) done.splice(0, done.length - 30);
+  if (state.restTokens >= MAX_TOKENS) return false;
+  state.restTokens++;
+  return true;
+}
+
+/**
+ * Tras completar algo de ayer (periodo de gracia): si ayer cerraba una semana que ahora llega
+ * a 5 días válidos, el token se concede igualmente.
+ */
+export function recheckWeekToken(state: GameState, today: string): boolean {
+  ensureTokenWeeks(state);
+  const prev = addDays(weekStart(today), -7);
+  if (state.meta.lastSettled && addDays(prev, 6) <= state.meta.lastSettled) return awardWeekToken(state, prev);
+  return false;
+}
+
+/** Solo se puede editar hoy y ayer (periodo de gracia de un día). */
+export function canEditDate(state: GameState, date: string, today: string): boolean {
+  return date === today || (date === addDays(today, -1) && date >= state.meta.createdAt);
 }
 
 /** Días seguidos sin cumplir hasta ayer (para el mensaje de reentrada). */
@@ -183,7 +217,8 @@ function pickAdjustment(state: GameState, rates: { q: Quest; rate: number }[], d
       const target = Math.max(5, Math.round((q.target ?? 10) * 0.66));
       return { kind: 'lower', questId: q.id, question: `«${title}» está costando. ¿Lo dejamos en ${target} min?`, change: { target } };
     }
-    if (!q.minimumViable) {
+    // nunca proponemos pausar los pasos hacia tus metas ni el diario: son el centro del arco
+    if (!q.minimumViable && !q.tags?.some((t) => t === 'goalstep' || t === 'journal')) {
       return { kind: 'lower', questId: q.id, question: `«${title}» no está encajando. ¿La pausamos por ahora? (puedes reactivarla en Ajustes)`, change: { active: false } };
     }
   }
@@ -209,9 +244,86 @@ export function applyAdjustment(state: GameState, adj: Adjustment, today: string
   return recomputeDay(state, today);
 }
 
-/** ¿Toca mostrar el resumen automáticamente? (domingo, una vez por semana, si hubo actividad). */
-export function shouldAutoSummary(state: GameState, today: string): boolean {
+/**
+ * ¿Toca mostrar el resumen automáticamente? Devuelve la semana a resumir (0 = la actual, 1 = la anterior)
+ * o null. El domingo se resume la semana en curso; si no abriste el juego ese día, la semana anterior
+ * se resume la próxima vez que entres.
+ */
+export function summaryDue(state: GameState, today: string): 0 | 1 | null {
   const ws = weekStart(today);
-  if (weekday(today) !== 6 || state.meta.lastSummaryWeek === ws) return false;
-  return weekDays(ws).some((d) => d <= today && (peekDay(state, d)?.xp ?? 0) > 0);
+  const prev = addDays(ws, -7);
+  const seen = state.meta.lastSummaryWeek;
+  const active = (w: string, upTo: string) => weekDays(w).some((d) => d <= upTo && (peekDay(state, d)?.xp ?? 0) > 0);
+  if (weekday(today) === 6 && seen !== ws && active(ws, today)) return 0;
+  if ((!seen || seen < prev) && active(prev, addDays(prev, 6))) return 1;
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Historial: el edificio bajo la habitación (una planta por semana, una ventana por día)
+
+export type DayLight = 'none' | 'future' | 'today' | 'lit' | 'bright' | 'rest' | 'off';
+
+export function dayLight(state: GameState, date: string, today: string): DayLight {
+  if (date < state.arc.start || date > state.arc.end) return 'none';
+  if (date > today) return 'future';
+  const d = peekDay(state, date);
+  if (d?.minimumMet) return d.bonus ? 'bright' : 'lit';
+  if (d?.restDay || d?.tokenUsed) return 'rest';
+  return date === today ? 'today' : 'off';
+}
+
+/** Lunes de cada semana del arco (planta 1 = primera semana). */
+export function arcWeeks(state: GameState): string[] {
+  const out: string[] = [];
+  for (let ws = weekStart(state.arc.start); ws <= state.arc.end; ws = addDays(ws, 7)) out.push(ws);
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Revisión final del arco
+
+export interface ArcReview {
+  elapsed: number; // días del arco transcurridos
+  total: number;
+  validDays: number;
+  bestStreak: number;
+  xp: number;
+  strongWeeks: number; // semanas con ≥5 días válidos
+  journals: number;
+  goals: { text: string; done: boolean; steps: number }[];
+  pillars: { pillar: PillarId; rate: number }[]; // cumplimiento medio de las diarias de cada pilar
+}
+
+export function arcReview(state: GameState, today: string): ArcReview {
+  const info = arcInfo(state.arc, today);
+  const last = today < state.arc.end ? today : state.arc.end;
+  const days: string[] = [];
+  for (let d = state.arc.start; d <= last; d = addDays(d, 1)) days.push(d);
+  const rates = PILLARS.map((pillar) => {
+    let sum = 0, n = 0;
+    for (const d of days) {
+      const qs = activeQuests(state, d).filter((q) => q.pillar === pillar && q.kind === 'daily');
+      if (!qs.length) continue;
+      sum += qs.filter((q) => isQuestDone(state, q, d)).length / qs.length;
+      n++;
+    }
+    return { pillar, rate: n ? sum / n : 0 };
+  });
+  return {
+    elapsed: days.length,
+    total: info.total,
+    validDays: days.filter((d) => isValidDay(state, d)).length,
+    bestStreak: bestStreak(state, last),
+    xp: state.xp,
+    strongWeeks: arcWeeks(state).filter((ws) => validDaysInWeek(state, ws) >= TOKEN_WEEK_THRESHOLD).length,
+    journals: Object.values(state.log).filter((d) => d.journal).length,
+    goals: state.goals.map((g) => ({ text: g.text, done: g.done, steps: goalStepCount(state, g.id) })),
+    pillars: rates.sort((a, b) => b.rate - a.rate),
+  };
+}
+
+/** ¿Toca la revisión final? (al terminar el arco, una vez) */
+export function reviewDue(state: GameState, today: string): boolean {
+  return !state.meta.reviewShown && diffDays(state.arc.end, today) > 0;
 }

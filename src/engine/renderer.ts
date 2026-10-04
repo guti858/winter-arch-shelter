@@ -1,15 +1,16 @@
-// Orquesta las capas de dibujo.
-import { boxHull, fillPoly, p, pointInPolygon, toWorld, type P2 } from './iso';
+// Orquesta las capas de dibujo: cielo y horizonte lejano, ciudad isométrica (con tu edificio y la
+// habitación en su sitio del orden de pintor), nieve, luz, partículas y viñeta.
+import { boxHull, p, pointInPolygon, toWorld, type P2 } from './iso';
 import type { ObjectId } from '../game/state';
-import { ANCHORS, orderedObjects, SCENE_OBJECTS, type SceneEnv } from '../scene/objects';
-import { drawFloor, drawShadow, drawWalls } from '../scene/room';
-import { City } from '../scene/city';
+import { ANCHORS, orderedObjects, SCENE_OBJECTS, type SceneEnv, type TowerInfo } from '../scene/objects';
+import { drawFloor, drawWalls, SLAB, WALL_T, ROOM_SIZE } from '../scene/room';
+import { City, type IsoRect } from '../scene/city';
+import { Skyline } from '../scene/skyline';
+import { DEFAULT_WEEKS, drawFloorHighlight, drawTower, drawTowerToday, floorHulls, streetZ } from '../scene/tower';
 import { computeLights, drawLampCone, Lighting, makeVignette, type Light, type LightFrame } from '../scene/lighting';
 import type { RGB } from './color';
 import { getAmbient } from '../scene/palette';
 import { Particles, Snow } from './particles';
-
-export const ROOM = 8; // tiles por lado
 
 export interface View {
   w: number; // px CSS
@@ -20,15 +21,21 @@ export interface View {
   oy: number;
 }
 
-export function computeView(w: number, h: number, dpr: number): View {
+/**
+ * Encuadre: la habitación arriba y su edificio hasta la calle, centrados entre el HUD y el dock.
+ * Recuadro en px isométricos: x ∈ [−300, 300], y desde lo alto de las paredes hasta la acera de delante.
+ */
+export function computeView(w: number, h: number, dpr: number, weeks = DEFAULT_WEEKS): View {
   const narrow = w <= 760;
   const top = narrow ? 124 : 64; // HUD (en móvil ocupa tres filas)
   const bottom = narrow ? 64 : 76; // dock de pilares
   const availH = Math.max(200, h - top - bottom);
-  // Extensión del diorama en px isométricos: ancho ≈ 540, alto ≈ 400 (paredes + suelo + losa)
-  const scale = Math.max(0.45, Math.min(2.4, Math.min((availH * 0.86) / 400, (w * 0.92) / 560)));
+  const frameTop = -150;
+  const frameBottom = 256 - streetZ(weeks) * 32 + 64;
+  const frameH = frameBottom - frameTop;
+  const scale = Math.max(0.42, Math.min(2.2, Math.min((availH * 0.97) / frameH, (w * 0.95) / 600)));
   const ox = w / 2;
-  const oy = top + availH / 2 - 90 * scale;
+  const oy = top + (availH - frameH * scale) / 2 - frameTop * scale;
   return { w, h, dpr, scale, ox, oy };
 }
 
@@ -83,19 +90,20 @@ export function pick(view: View, env: SceneEnv, x: number, y: number): ObjectId 
   return null;
 }
 
+let floorCache: { weeks: number; hulls: P2[][] } | null = null;
+
+/** Planta del edificio (semana, 0 = la primera) bajo el punto, o null. */
+export function pickFloor(view: View, weeks: number, x: number, y: number): number | null {
+  if (!weeks) return null;
+  if (!floorCache || floorCache.weeks !== weeks) floorCache = { weeks, hulls: floorHulls(weeks) };
+  const { ix, iy } = screenToIso(view, x, y);
+  for (let k = weeks - 1; k >= 0; k--) if (pointInPolygon(ix, iy, floorCache.hulls[k])) return k;
+  return null;
+}
+
 export function hullFor(target: ObjectId): P2[] {
   const o = SCENE_OBJECTS.find((s) => s.target === target)!;
   return hullOf(o.id);
-}
-
-// ---------------------------------------------------------------------------
-// Dibujo del cuarto
-
-export function drawRoom(ctx: CanvasRenderingContext2D, view: View, env: SceneEnv) {
-  setWorldTransform(ctx, view);
-  drawFloor(ctx);
-  drawWalls(ctx);
-  for (const o of orderedObjects(env)) o.draw(ctx, env);
 }
 
 export function drawHover(ctx: CanvasRenderingContext2D, view: View, target: ObjectId, t: number) {
@@ -116,29 +124,8 @@ export function drawHover(ctx: CanvasRenderingContext2D, view: View, target: Obj
   ctx.restore();
 }
 
-/** Rejilla de depuración (hito 0). */
-export function drawDebugGrid(ctx: CanvasRenderingContext2D, view: View, hover: { x: number; y: number } | null) {
-  setWorldTransform(ctx, view);
-  for (let x = 0; x < ROOM; x++) {
-    for (let y = 0; y < ROOM; y++) {
-      const isHover = hover && Math.floor(hover.x) === x && Math.floor(hover.y) === y;
-      if (!isHover) continue;
-      fillPoly(ctx, [[x, y, 0.01], [x + 1, y, 0.01], [x + 1, y + 1, 0.01], [x, y + 1, 0.01]], 'rgba(255,179,71,0.35)');
-    }
-  }
-  ctx.strokeStyle = 'rgba(127,214,255,0.35)';
-  ctx.lineWidth = 1 / view.scale;
-  ctx.beginPath();
-  for (let i = 0; i <= ROOM; i++) {
-    const a = p(i, 0), b = p(i, ROOM), c = p(0, i), d = p(ROOM, i);
-    ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
-    ctx.moveTo(c[0], c[1]); ctx.lineTo(d[0], d[1]);
-  }
-  ctx.stroke();
-}
-
 // ---------------------------------------------------------------------------
-// Renderer: compone ciudad, nieve, cuarto, luz, partículas y viñeta.
+// Renderer
 
 export const SNOW_BY_PHASE: Record<1 | 2 | 3, number> = { 1: 120, 2: 175, 3: 230 };
 
@@ -150,13 +137,15 @@ export interface PointerLike { nx: number; ny: number; inside: boolean; isTouch:
 export class Renderer {
   readonly ctx: CanvasRenderingContext2D;
   view: View;
+  readonly skyline = new Skyline();
   readonly city = new City();
   readonly snow = new Snow();
   readonly lighting = new Lighting();
   readonly particles = new Particles();
   /** Progreso del barrido de luz de subida de nivel (0..1) o null. */
   sweep: number | null = null;
-  /** Ráfaga de nieve (segundos restantes) al cambiar de fase. */
+  /** Planta del edificio bajo el ratón (para resaltarla). */
+  hoveredFloor: number | null = null;
   private gustT = 0;
   private parallax = { x: 0, y: 0 };
   private moteTimer = 0;
@@ -167,10 +156,12 @@ export class Renderer {
   private roomFrame: LightFrame = { w: 0, h: 0, ox: 0, oy: 0, scale: 1 };
   private roomSig = '';
   private roomAge = Infinity;
-  private backdrop = document.createElement('canvas');
+  // Edificio-historial (se repinta cuando cambia el historial)
+  private tower: { canvas: HTMLCanvasElement; rect: IsoRect; sig: string } | null = null;
   private vignette: HTMLCanvasElement | null = null;
-  /** Media móvil del tiempo de frame: si el equipo va justo, el cuarto se refresca a 20 Hz. */
   private frameCost = 1 / 60;
+  private weeks = DEFAULT_WEEKS;
+  private citySig = '';
   /** Desplazamiento horizontal del diorama para dejar sitio al panel lateral. */
   private baseOx = 0;
   private shift = 0;
@@ -184,13 +175,13 @@ export class Renderer {
 
   resize() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    this.view = computeView(window.innerWidth, window.innerHeight, dpr);
+    this.view = computeView(window.innerWidth, window.innerHeight, dpr, this.weeks);
     const { canvas, view } = this;
     canvas.width = Math.round(view.w * dpr);
     canvas.height = Math.round(view.h * dpr);
     canvas.style.width = view.w + 'px';
     canvas.style.height = view.h + 'px';
-    this.city.resize(view.w, view.h, dpr);
+    this.skyline.resize(view.w, view.h, dpr);
     this.snow.resize(view.w, view.h);
     const s = view.scale;
     this.roomFrame = { w: Math.ceil(ROOM_BOX.w * s), h: Math.ceil(ROOM_BOX.h * s), ox: ROOM_BOX.ox * s, oy: ROOM_BOX.oy * s, scale: s };
@@ -198,34 +189,51 @@ export class Renderer {
     this.room.height = Math.ceil(this.roomFrame.h * dpr);
     this.lighting.resize(this.roomFrame);
     this.roomSig = '';
+    this.tower = null;
+    this.citySig = '';
     this.baseOx = view.ox;
     this.shift = 0;
-    this.buildBackdrop();
     this.vignette = makeVignette(view);
   }
 
-  /** Halo oscuro tras el diorama (lo separa de la ciudad) + sombra flotante. Estático. */
-  private buildBackdrop() {
-    const { view } = this;
-    const c = this.backdrop;
-    c.width = Math.ceil(view.w * view.dpr);
-    c.height = Math.ceil(view.h * view.dpr);
+  /** Zona visible en px isométricos (con margen para el desplazamiento del panel). */
+  private visibleIso(): IsoRect {
+    const v = this.view;
+    const mx = 420;
+    const x0 = (-this.baseOx - mx) / v.scale, x1 = (v.w - this.baseOx + mx) / v.scale;
+    const y0 = (-v.oy - 30) / v.scale, y1 = (v.h - v.oy + 30) / v.scale;
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+
+  private ensureCity(weeks: number, glow: number) {
+    if (weeks !== this.weeks) {
+      this.weeks = weeks;
+      this.resize();
+    }
+    const sig = `${this.view.w}x${this.view.h}|${weeks}|${glow.toFixed(2)}`;
+    if (sig === this.citySig) return;
+    this.citySig = sig;
+    this.city.build(streetZ(weeks), this.view.scale, this.view.dpr, this.visibleIso(), glow);
+  }
+
+  private ensureTower(info: TowerInfo) {
+    const sig = info.weeks.map((w) => w.phase + w.lights.join('')).join('|') + this.view.scale;
+    if (this.tower?.sig === sig) return;
+    const weeks = Math.max(1, info.weeks.length || DEFAULT_WEEKS);
+    const z0 = streetZ(weeks);
+    const hull = boxHull({ x: -WALL_T - 0.2, y: -WALL_T - 0.2, z: z0, w: ROOM_SIZE + WALL_T + 0.5, d: ROOM_SIZE + WALL_T + 0.5, h: -SLAB - z0 + 0.1 });
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const [x, y] of hull) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+    const pad = 30;
+    const rect = { x: x0 - pad, y: y0 - pad, w: x1 - x0 + pad * 2, h: y1 - y0 + pad * 2 };
+    const k = this.view.scale * this.view.dpr;
+    const c = document.createElement('canvas');
+    c.width = Math.ceil(rect.w * k);
+    c.height = Math.ceil(rect.h * k);
     const ctx = c.getContext('2d')!;
-    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-    const [cx, cy] = this.toScreen(4, 4, 1.2);
-    const r = 330 * view.scale;
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.scale(1, 0.78);
-    const g = ctx.createRadialGradient(0, 0, r * 0.35, 0, 0, r);
-    g.addColorStop(0, 'rgba(8,8,26,0.5)');
-    g.addColorStop(0.6, 'rgba(8,8,26,0.28)');
-    g.addColorStop(1, 'rgba(8,8,26,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(-r, -r, r * 2, r * 2);
-    ctx.restore();
-    setWorldTransform(ctx, view);
-    drawShadow(ctx);
+    ctx.setTransform(k, 0, 0, k, -rect.x * k, -rect.y * k);
+    drawTower(ctx, info);
+    this.tower = { canvas: c, rect, sig };
   }
 
   /** Ráfaga de nieve y viento (transición de fase). */
@@ -247,7 +255,7 @@ export class Renderer {
       this.shiftTarget = 0;
       return;
     }
-    const half = (ROOM_BOX.w / 2) * view.scale;
+    const half = 300 * view.scale;
     const need = this.baseOx + half - (view.w - px - 12);
     const room = this.baseOx - half - 8;
     this.shiftTarget = Math.max(0, Math.min(need, room));
@@ -262,11 +270,15 @@ export class Renderer {
     return this.toScreen(x, y, z);
   }
 
+  get towerWeeks() {
+    return this.weeks;
+  }
+
   private signature(env: SceneEnv) {
     const r = (v: number) => Math.round(v * 50);
     return [
       env.level, env.phase, env.bossDecor, env.timerRunning, env.journalToday, env.reducedMotion,
-      env.goals.map((g) => (g.done ? 1 : 0)).join(''),
+      env.goals.map((g) => `${g.done ? 1 : 0}${g.steps}`).join(''),
       Object.values(env.glow).map(r).join(','),
       Object.values(env.meters).map(r).join(','),
     ].join('|');
@@ -291,17 +303,22 @@ export class Renderer {
     const t = env.t;
     const amb = getAmbient(env.level, env.phase);
     this.frameCost += (dt - this.frameCost) * 0.05;
+    const weeks = Math.max(1, env.tower.weeks.length || DEFAULT_WEEKS);
+    this.ensureCity(weeks, Math.round(amb.cityGlow * 20) / 20);
+    this.ensureTower(env.tower);
+
     this.shift += (this.shiftTarget - this.shift) * Math.min(1, dt * (env.reducedMotion ? 60 : 6));
     if (Math.abs(this.shiftTarget - this.shift) < 0.3) this.shift = this.shiftTarget;
     view.ox = this.baseOx - this.shift;
 
-    // parallax suave según el ratón (0 en táctil o con movimiento reducido)
+    // parallax mínimo solo en el horizonte lejano
     const want = env.reducedMotion || pointer.isTouch ? { x: 0, y: 0 } : { x: pointer.nx, y: pointer.ny };
     this.parallax.x += (want.x - this.parallax.x) * Math.min(1, dt * 3);
     this.parallax.y += (want.y - this.parallax.y) * Math.min(1, dt * 3);
 
     this.particles.reduced = env.reducedMotion;
-    this.city.update(env.reducedMotion ? 0 : dt);
+    this.skyline.update(env.reducedMotion ? 0 : dt);
+    this.city.update(env.reducedMotion ? dt * 0.35 : dt, env.hour);
     this.gustT = Math.max(0, this.gustT - dt);
     const gust = env.reducedMotion ? 0 : Math.sin(Math.min(1, this.gustT / 5) * Math.PI);
     this.snow.setIntensity(env.reducedMotion ? 45 : SNOW_BY_PHASE[env.phase] + 150 * gust);
@@ -309,9 +326,7 @@ export class Renderer {
 
     setScreenTransform(ctx, view);
     ctx.globalCompositeOperation = 'source-over';
-    this.city.draw(ctx, t, this.parallax.x, this.parallax.y, amb.cityGlow);
-    this.snow.draw(ctx, 'back', amb.snow, false);
-    ctx.drawImage(this.backdrop, -this.shift, 0, view.w, view.h);
+    this.skyline.draw(ctx, t, this.parallax.x * 0.5, this.parallax.y * 0.5, amb.cityGlow);
 
     // cuarto iluminado (cacheado)
     const lights = computeLights(env, amb);
@@ -324,8 +339,21 @@ export class Renderer {
       this.roomSig = sig;
       this.roomAge = 0;
     }
-    const f = this.roomFrame;
-    ctx.drawImage(this.room, view.ox - f.ox, view.oy - f.oy, f.w, f.h);
+
+    // ciudad isométrica con tu edificio y la habitación en su sitio del orden de pintor
+    this.city.draw(ctx, view, t, env.phase, () => {
+      const tw = this.tower!;
+      setScreenTransform(ctx, view);
+      ctx.drawImage(tw.canvas, view.ox + tw.rect.x * view.scale, view.oy + tw.rect.y * view.scale, tw.rect.w * view.scale, tw.rect.h * view.scale);
+      setWorldTransform(ctx, view);
+      if (!env.reducedMotion) drawTowerToday(ctx, env.tower, t);
+      if (this.hoveredFloor !== null) drawFloorHighlight(ctx, weeks, this.hoveredFloor);
+      setScreenTransform(ctx, view);
+      const f = this.roomFrame;
+      ctx.drawImage(this.room, view.ox - f.ox, view.oy - f.oy, f.w, f.h);
+    });
+    setScreenTransform(ctx, view);
+    this.snow.draw(ctx, 'back', amb.snow, false);
 
     const lampOn = env.level >= 2 ? (0.55 + 0.45 * env.glow.desk) * amb.warmBoost : 0;
     drawLampCone(ctx, view, lampOn);

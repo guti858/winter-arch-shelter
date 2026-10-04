@@ -9,7 +9,7 @@ export const MAX_LEVEL = 10;
  * Umbrales de XP acumulado para cada nivel (intensidad Normal). Curva suave: los primeros niveles
  * llegan en días; con ~75 % de lo planeado durante 88 días se alcanza el nivel 9–10.
  */
-export const BASE_THRESHOLDS = [0, 150, 500, 1100, 2000, 3200, 4800, 6800, 9300, 12500];
+export const BASE_THRESHOLDS = [0, 160, 550, 1200, 2200, 3500, 5300, 7500, 10200, 13800];
 
 /** Escala por intensidad: lo "planeado" cambia con la carga elegida. */
 export const INTENSITY_FACTOR: Record<Intensity, number> = { suave: 0.65, normal: 1, intensa: 1.2 };

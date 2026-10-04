@@ -46,6 +46,8 @@ export interface DayLog {
   bonus?: number; // bonus de "todas las diarias" concedido ese día
   restDay?: boolean; // descanso planeado con token
   tokenUsed?: boolean; // token gastado automáticamente para salvar la racha
+  goalSteps?: string[]; // metas en las que diste un paso ese día
+  priorityDone?: boolean; // cumpliste la prioridad que escribiste en el diario de la víspera
 }
 
 export interface Goal { id: string; text: string; done: boolean }
@@ -77,12 +79,15 @@ export interface GameState {
     reentryShown?: string;
     timer?: TimerState | null;
     debugXp?: number; // XP añadido desde la consola de depuración
+    tokenWeeks?: string[]; // semanas (lunes) ya evaluadas para ganar token
+    reviewShown?: boolean; // revisión final del arco ya mostrada
   };
 }
 
 export const STORAGE_KEY = 'winterArcRoom.v1';
 export const MAX_TOKENS = 2;
-export const GOAL_XP = 80;
+export const GOAL_XP = 150; // cumplir una meta del arco
+export const PRIORITY_XP = 10; // cumplir la prioridad del día
 
 // ---------------------------------------------------------------------------
 // Contenido
@@ -159,7 +164,7 @@ export function createState(o: NewGameOptions): GameState {
     xp: 0,
     restTokens: 0,
     settings: { sound: true, reducedMotion: false },
-    meta: { createdAt: o.today, lastLevelSeen: 1, lastPhaseSeen: 1, timer: null },
+    meta: { createdAt: o.today, lastLevelSeen: 1, lastPhaseSeen: 1, timer: null, tokenWeeks: [] },
   };
 }
 

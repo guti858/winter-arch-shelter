@@ -11,11 +11,13 @@ const D = '2026-10-06';
 describe('tareas', () => {
   it('Normal en fase 1 tiene ~8 diarias; Suave solo ★; Intensa más', () => {
     const daily = (s: ReturnType<typeof newGame>) => activeQuests(s, D).filter((q) => q.kind === 'daily').length;
-    expect(daily(newGame())).toBe(8);
-    expect(daily(newGame({ intensity: 'suave' }))).toBe(6);
-    expect(daily(newGame({ intensity: 'intensa' }))).toBe(11);
+    // incluye "dar un paso hacia una meta" (solo existe mientras haya metas abiertas)
+    expect(daily(newGame())).toBe(9);
+    expect(daily(newGame({ intensity: 'suave' }))).toBe(7);
+    expect(daily(newGame({ intensity: 'intensa' }))).toBe(12);
+    expect(daily(newGame({ goals: [] }))).toBe(8);
     // en fase 2 se desbloquean más
-    expect(activeQuests(newGame(), '2026-11-03').filter((q) => q.kind === 'daily').length).toBe(11);
+    expect(activeQuests(newGame(), '2026-11-03').filter((q) => q.kind === 'daily').length).toBe(12);
   });
 
   it('completar da XP y deshacer lo retira', () => {

@@ -2,6 +2,7 @@
 import { drawBox, drawCylinder, fillPoly, p, depthKey, type P2 } from '../engine/iso';
 import { rgba, shade } from '../engine/color';
 import type { ObjectId, PillarId } from '../game/state';
+import type { DayLight } from '../game/streaks';
 import { BOOK_COLORS, MAT, blanketColor } from './palette';
 import { mulberry32 } from '../engine/random';
 import { WINDOW, WALL_T } from './room';
@@ -18,12 +19,19 @@ export interface SceneEnv {
   glow: Record<ObjectId, number>;
   /** Destello temporal de recompensa por objeto (0..1, decae). */
   flash: Partial<Record<ObjectId, number>>;
-  goals: { text: string; done: boolean }[];
+  goals: { text: string; done: boolean; steps: number }[];
+  /** Hora real 0–24 (densidad de tráfico de la ciudad). */
+  hour: number;
+  /** Historial del arco para el edificio bajo la habitación. */
+  tower: TowerInfo;
   bossDecor: number | null; // decoración temporal del reto semanal
   timerRunning: boolean;
   journalToday: boolean;
   reducedMotion: boolean;
 }
+
+export interface TowerWeek { ws: string; phase: 1 | 2 | 3; lights: DayLight[]; current: boolean }
+export interface TowerInfo { weeks: TowerWeek[] }
 
 export interface SceneObject {
   id: string;
@@ -199,6 +207,13 @@ function drawCorkboard(ctx: CanvasRenderingContext2D, env: SceneEnv) {
     // "texto"
     for (let k = 0; k < 3; k++) {
       quadX(ctx, 0.071, yy + 0.04, yy + 0.26 - k * 0.05, zz - 0.08 - k * 0.07, zz - 0.06 - k * 0.07, rgba('#5a4a3a', 0.45));
+    }
+    if (isGoal && env.goals[i].steps > 0) {
+      // un hilo de pasos: una marca por paso (hasta 8 visibles)
+      const n = Math.min(8, env.goals[i].steps);
+      for (let k = 0; k < n; k++) {
+        quadX(ctx, 0.072, yy + 0.03 + k * 0.034, yy + 0.055 + k * 0.034, zz - 0.29, zz - 0.255, '#e0533f');
+      }
     }
     if (isGoal && env.goals[i].done) {
       // check verde

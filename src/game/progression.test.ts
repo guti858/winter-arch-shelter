@@ -6,8 +6,8 @@ import { newGame } from './testutil';
 describe('progresión', () => {
   it('nivel 1 con 0 XP y 10 como máximo', () => {
     expect(levelFor(0, 'normal')).toBe(1);
-    expect(levelFor(149, 'normal')).toBe(1);
-    expect(levelFor(150, 'normal')).toBe(2);
+    expect(levelFor(159, 'normal')).toBe(1);
+    expect(levelFor(160, 'normal')).toBe(2);
     expect(levelFor(1e9, 'normal')).toBe(10);
   });
 
@@ -21,7 +21,7 @@ describe('progresión', () => {
   });
 
   it('progreso dentro del nivel', () => {
-    const p = levelProgress(325, 'normal');
+    const p = levelProgress(355, 'normal'); // a mitad entre 160 y 550
     expect(p.level).toBe(2);
     expect(p.pct).toBeCloseTo(0.5);
     expect(levelProgress(20000, 'normal')).toMatchObject({ level: 10, to: null, pct: 1 });

@@ -2,9 +2,9 @@
 
 > *Tu habitación es tu progreso: cada tarea real que cumples enciende una luz.*
 
-Juego web de escena isométrica: un apartamento nocturno flotando sobre una ciudad iluminada, con nieve cayendo. No hay combate ni avatar: cumples tareas reales de tu *winter arc* (del inicio del arco al 31 de diciembre) y la habitación **evoluciona visualmente** de un cuarto oscuro y desordenado a un espacio cálido, ordenado y vivo.
+Juego web de escena isométrica: tu habitación es la última planta de un edificio, en medio de una ciudad nocturna con nieve, tráfico y farolas. La ciudad no se toca: es el bullicio de fondo. Tu rincón, arriba, es donde te centras en lo tuyo. No hay combate ni avatar: cumples tareas reales de tu *winter arc* (del inicio del arco al 31 de diciembre) y la habitación **evoluciona visualmente** de un cuarto oscuro y desordenado a un espacio cálido, ordenado y vivo. El edificio que la sostiene es tu **historial**: una planta por semana y una ventana por día, que se encienden cuando cumples.
 
-![Captura del juego: habitación en nivel 7 con el panel de Cuerpo abierto](docs/captura.jpg)
+![Captura del juego: la habitación en nivel 7 sobre su edificio-historial, con la ciudad alrededor](docs/captura.jpg)
 
 Prototipo jugable en el navegador, de una sola página y sin backend. Todo el arte es código (Canvas 2D), sin assets binarios, sin red y sin telemetría.
 
@@ -35,6 +35,8 @@ El build es estático: `dist/` se puede servir desde cualquier hosting de ficher
 1. **Pantalla de inicio** (primer uso), en 3 pasos: fecha de inicio del arco, intensidad (Suave / Normal / Intensa) con tu hora objetivo para acostarte, y de 1 a 3 metas del arco.
 2. **La escena es la interfaz.** Cada pilar de vida está ligado a un objeto. Pasa el ratón por encima (contorno brillante + tooltip con el progreso de hoy) y haz clic para abrir sus tareas.
 3. **Completa tareas**: chispas doradas desde el objeto, XP flotante y el objeto se ilumina un poco más. Al subir de nivel, un barrido de luz recorre la habitación.
+4. **Mira tu edificio**: cada planta es una semana del arco (la 1, *Cimientos*, junto a la calle; la última, *Remate*, bajo tu habitación) y cada ventana un día, de lunes a domingo. Cálida si cumpliste el mínimo, más brillante si hiciste todas las diarias, azul si fue descanso, apagada si no. Las semanas que aún no han llegado están a oscuras: el arco se construye hacia arriba hasta tu cuarto. Pasa el ratón por una planta para ver su semana y haz clic para abrir su resumen.
+5. **La ciudad** sigue a lo suyo: coches con los faros encendidos (más tráfico al caer la tarde y casi nada de madrugada, según tu hora real), peatones con paraguas, semáforos, farolas, escaparates, una plaza con quiosco delante de tu portal y, en diciembre, el árbol de la plaza iluminado.
 
 | Objeto | Pilar |
 |---|---|
@@ -59,6 +61,9 @@ El build es estático: `dist/` se puede servir desde cualquier hosting de ficher
 ### Reglas
 
 - **Día lógico**: el día cambia a las **04:00** locales (si trasnochas, sigue siendo "hoy"). Las semanales se reinician el lunes a las 04:00.
+- **Periodo de gracia**: en la vista *Hoy* puedes cambiar a **Ayer** y marcar lo que hiciste y no apuntaste (también el diario de ayer). Se cierra cuando acaba hoy. Si con eso ayer llega al mínimo y un token lo había salvado, **el token vuelve**; si completa una semana de 5 días, ganas su token.
+- **Metas del arco**: cada día hay una tarea *Dar un paso hacia una de tus metas*: eliges en qué meta avanzaste y el paso queda clavado en el corcho (contador por meta). Cumplir una meta da **+150 XP**. Si cierras todas las metas, la tarea desaparece.
+- **Prioridad del día**: lo que escribes en el diario como *prioridad de mañana* aparece al día siguiente en el HUD y arriba de la vista *Hoy*; marcarla da +10 XP.
 - **El arco**: por defecto 88 días, del 5 oct al 31 dic 2026, en tres fases: **Cimientos** (28 d), **Construcción** (35 d, aparecen tareas nuevas y retos semanales) y **Remate** (25 d). Si empiezas en otra fecha, el arco termina igualmente el 31/12 y las fases se reparten en la misma proporción. Antes de la fecha de inicio estás en *calentamiento*: las tareas ya cuentan.
 - **Día mínimo viable**: completar **3 tareas ★** hace que el día cuente para la racha aunque no hagas el resto. Hacer todas las diarias da **+20 % de XP**.
 - **Racha** 🔥: días seguidos con el mínimo cumplido.
@@ -66,7 +71,8 @@ El build es estático: `dist/` se puede servir desde cualquier hosting de ficher
 - **Día malo** 🌧: una vez por semana, ese día bastan 2 tareas ★ (sin bonus).
 - **La habitación nunca retrocede**: perder la racha la pone a 0, pero no resta XP ni nivel. Si fallas 3 días seguidos, al volver verás un mensaje de reentrada en lugar de una pantalla de fracaso. El HUD nunca muestra días perdidos.
 - **Nivel de habitación** (1–10) por XP acumulado. Cada nivel desbloquea cambios visibles (ver abajo). Además, cada pilar tiene un **medidor de luz** que modula el brillo de su objeto: descuidar un pilar se nota sin penalizar.
-- **Resumen semanal**: se abre solo el domingo (o con el botón *Semana*): días válidos, XP, lo más y lo menos cumplido y **una sola** pregunta de ajuste (bajar o subir la dificultad de una tarea).
+- **Resumen semanal**: se abre solo el domingo (o con el botón *Semana*, o al hacer clic en una planta del edificio): días válidos, XP, lo más y lo menos cumplido y **una sola** pregunta de ajuste (bajar o subir la dificultad de una tarea; nunca propone pausar los pasos hacia tus metas ni el diario). Si no abriste el juego el domingo, el resumen de esa semana aparece la próxima vez que entres.
+- **Revisión del arco**: desde el corcho en la fase 3, y automáticamente al terminar el arco. Resume días con el mínimo, mejor racha, semanas sólidas, noches de diario, pasos dados hacia cada meta y tu pilar más constante; permite guardar el recuerdo (JSON) y empezar un arco nuevo.
 - **Reto "jefe"** (fases 2 y 3): cada lunes, un reto rotativo de una lista de 12. Cumplirlo da +60 XP y deja un recuerdo temporal sobre la estantería.
 
 ### Los 10 niveles
@@ -130,6 +136,7 @@ Abre las herramientas del navegador y usa `window.__debug`:
 __debug.addXp(500)    // suma XP (prueba niveles)
 __debug.setLevel(7)   // fija el nivel de habitación
 __debug.setDay(29)    // viaja al día 29 del arco (inicio de la fase 2) sin esperar días reales
+__debug.fillHistory(0.8) // rellena los días pasados con ~80 % de cumplimiento (para ver el edificio)
 __debug.resetDay()    // vuelve a la fecha real
 __debug.today()       // día lógico actual
 __debug.state()       // estado completo
@@ -159,17 +166,21 @@ winter-arch-shelter/
    ├─ scene/
    │  ├─ room.ts            # suelo, losa del diorama, paredes con hueco de ventana
    │  ├─ objects.ts         # catálogo de objetos y su arte procedural por nivel
-   │  ├─ city.ts            # skyline en 3 capas, ventanas, balizas, coches, tren
+   │  ├─ tower.ts           # tu edificio-historial: una planta por semana, una ventana por día
+   │  ├─ city.ts            # ciudad isométrica: manzanas, calles, coches, peatones, farolas, plaza
+   │  ├─ skyline.ts         # cielo, luna, estrellas y horizonte lejano en 2D con bruma
    │  ├─ lighting.ts        # mapa de luz (multiply), focos, halos, cono del flexo, viñeta
    │  └─ palette.ts         # materiales y ambiente por nivel/fase
    ├─ game/                 # lógica pura (sin DOM ni canvas), con tests
    │  ├─ state.ts           # tipos, contenido y creación de partida
-   │  ├─ quests.ts          # progreso, XP, mínimo viable, bonus, temporizadores, diario, metas, reto
-   │  ├─ streaks.ts         # rachas, tokens, día malo, reentrada, resumen semanal
+   │  ├─ quests.ts          # progreso, XP, mínimo viable, bonus, temporizadores, diario, metas
+   │  │                     #   y sus pasos, prioridad del día, reto semanal
+   │  ├─ streaks.ts         # rachas, tokens, periodo de gracia, día malo, reentrada, resúmenes,
+   │  │                     #   historial del edificio y revisión final
    │  ├─ progression.ts     # niveles y medidores de luz
    │  ├─ calendar.ts        # día lógico, fases, día N de M
    │  ├─ storage.ts         # localStorage + export/import JSON
-   │  └─ *.test.ts          # Vitest (incluye simulate.test.ts)
+   │  └─ *.test.ts          # Vitest (incluye simulate.test.ts y mechanics.test.ts)
    ├─ ui/
    │  ├─ hud.ts             # barra superior, dock, tooltip, toasts, tarjeta de fase
    │  ├─ panel.ts           # panel lateral por objeto y vista "Hoy"
@@ -196,13 +207,15 @@ Lo ambiguo se resolvió con la opción más simple; aquí queda anotado:
 7. **Tokens**: se gastan solos solo si la racha venía viva (no se desperdician); se ganan al cerrar la semana (domingo).
 8. **Deshacer** una tarea retira su XP (evita sumar XP marcando y desmarcando). Es la única forma de que el nivel baje.
 9. **Temporizadores** basados en marcas de tiempo: sobreviven a recargas y se completan aunque la pestaña haya estado en segundo plano.
-10. **Curva de niveles**: umbrales `0, 150, 500, 1100, 2000, 3200, 4800, 6800, 9300, 12500` XP en Normal, ×0,65 en Suave y ×1,2 en Intensa. La simulación (75 % de adherencia) acaba en nivel 9 en Normal y Suave.
+10. **Curva de niveles**: umbrales `0, 160, 550, 1200, 2200, 3500, 5300, 7500, 10200, 13800` XP en Normal, ×0,65 en Suave y ×1,2 en Intensa. La simulación (75 % de adherencia, con los pasos hacia metas) acaba en nivel 9 en Normal y Suave.
 11. **Medidor de luz** = máx(cumplimiento de hoy, media de los últimos 7 días) de las tareas del objeto. El corcho también se ilumina con las metas cumplidas.
 12. **Reto semanal**: es una tarea semanal con la etiqueta `boss` en el corcho; su título rota cada lunes. La decoración se ve la semana en que se cumple y la siguiente.
-13. **Campos extra** (opcionales) en los tipos del documento: `Quest.tier/object/unit/tags`, `DayLog.xp/bonus/restDay/tokenUsed`, `arc.bedtime` y `GameState.meta` (último día procesado, último nivel/fase vistos, temporizador…).
-14. **Archivos extra** respecto al árbol del documento: `src/app.ts`, `engine/audio.ts`, `engine/color.ts`, `engine/random.ts`, `ui/dom.ts`, `game/testutil.ts`. `storage.importJSON` recibe el texto del archivo (lo lee la interfaz) para que `game/` siga siendo puro.
-15. **Rendimiento**: el cuarto iluminado se cachea en un lienzo aparte y solo se repinta cuando cambia algo o para las animaciones (a 20 Hz si el equipo va justo); la ciudad y la viñeta se pre-renderizan y el mapa de luz va a media resolución.
-16. **Sonido**: activado por defecto en Ajustes, pero no suena nada hasta el primer clic o tecla (política de autoplay).
+13. **Campos extra** (opcionales) en los tipos del documento: `Quest.tier/object/unit/tags`, `DayLog.xp/bonus/restDay/tokenUsed/goalSteps/priorityDone`, `arc.bedtime` y `GameState.meta` (último día procesado, semanas ya evaluadas para tokens, último nivel/fase vistos, revisión mostrada, temporizador…). Las partidas antiguas se cargan sin perder nada.
+14. **Archivos extra** respecto al árbol del documento: `src/app.ts`, `engine/audio.ts`, `engine/color.ts`, `engine/random.ts`, `scene/tower.ts`, `scene/skyline.ts`, `ui/dom.ts`, `game/testutil.ts`. `storage.importJSON` recibe el texto del archivo (lo lee la interfaz) para que `game/` siga siendo puro.
+15. **Rendimiento**: el cuarto iluminado se cachea en un lienzo aparte y solo se repinta cuando cambia algo o para las animaciones (a 20 Hz si el equipo va justo). La ciudad se pre-renderiza en sprites ordenados una vez (orden topológico por cajas) y se compone en dos capas, detrás y delante de tu edificio. Cada frame solo se dibujan coches y peatones, y se repinta, recortado a su caja, lo que debe taparlos. El mapa de luz va a media resolución.
+16. **Escena**: la ciudad usa la misma proyección y escala que la habitación (manzanas de 8×8 con calles de 4). Delante de tu edificio solo hay edificios bajos y la plaza, para que nunca tapen tu historial; detrás y a los lados se alzan los altos con bruma por profundidad. El parallax queda solo en el horizonte lejano. El encuadre se calcula para que se vean la habitación, el edificio entero y la acera.
+17. **Mecánicas añadidas tras auditar el prototipo**: periodo de gracia de un día (con devolución de token), pasos diarios hacia las metas, prioridad del día desde el diario, resumen semanal atrasado, edificio-historial y revisión final del arco. Se explican en *Reglas* y las cubre `mechanics.test.ts`.
+18. **Sonido**: activado por defecto en Ajustes, pero no suena nada hasta el primer clic o tecla (política de autoplay).
 
 ## Criterios de aceptación
 
@@ -215,4 +228,4 @@ Lo ambiguo se resolvió con la opción más simple; aquí queda anotado:
 - [x] Fase del arco y "Día N/88" según la fecha real.
 - [~] Navegadores: probado en Chromium (escritorio y móvil emulado). Solo usa APIs estándar (Canvas 2D, Web Audio, `localStorage`); falta probarlo a mano en Firefox y Safari.
 - [x] Sin assets externos, sin red, sin telemetría.
-- [x] Lógica de `game/` con tests unitarios (`npm test`, 38 tests).
+- [x] Lógica de `game/` con tests unitarios (`npm test`, 48 tests).

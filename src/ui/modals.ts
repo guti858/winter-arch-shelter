@@ -2,9 +2,10 @@
 import type { App } from '../app';
 import { addDays, arcEndFor, arcInfo, arcLength, DEFAULT_START, phaseLengths, prettyDate, weekStart } from '../game/calendar';
 import { bossChallenge, bossQuest, isQuestDone, journalQuest, saveJournal } from '../game/quests';
-import { applyAdjustment, computeStreak, weekSummary, type Adjustment } from '../game/streaks';
+import { applyAdjustment, arcReview, arcWeeks, computeStreak, weekSummary, type Adjustment } from '../game/streaks';
+import { levelFor } from '../game/progression';
 import { exportJSON, importJSON } from '../game/storage';
-import { createState, PILLAR_DEFS, questsForIntensity, QUEST_TEMPLATE, questTitle, type Intensity } from '../game/state';
+import { createState, PILLAR_DEFS, pillarDef, questsForIntensity, QUEST_TEMPLATE, questTitle, type Intensity } from '../game/state';
 import { download, el, esc } from './dom';
 
 type Cleanup = () => void;
@@ -173,21 +174,21 @@ export class Modals {
 
   // ------------------------------------------------------------------ diario
 
-  journal() {
+  journal(date = this.app.today) {
     const s = this.app.state;
     if (!s) return;
-    const today = this.app.today;
-    const j = s.log[today]?.journal ?? { good: '', improve: '', tomorrow: '' };
+    const isToday = date === this.app.today;
+    const j = s.log[date]?.journal ?? { good: '', improve: '', tomorrow: '' };
     const q = journalQuest(s);
-    const already = q ? isQuestDone(s, q, today) : false;
+    const already = q ? isQuestDone(s, q, date) : false;
     const m = this.show(`
-      <h2>Diario nocturno</h2>
-      <p class="lead">${esc(prettyDate(today, true))} · tres líneas, sin presión.</p>
-      <label class="lbl" for="j-good">✓ Qué salió bien hoy</label>
+      <h2>Diario nocturno${isToday ? '' : ' de ayer'}</h2>
+      <p class="lead">${esc(prettyDate(date, true))} · tres líneas, sin presión.</p>
+      <label class="lbl" for="j-good">✓ Qué salió bien ${isToday ? 'hoy' : 'ayer'}</label>
       <textarea class="field" id="j-good" maxlength="400" rows="2">${esc(j.good)}</textarea>
       <label class="lbl" for="j-imp">↗ Qué mejorar</label>
       <textarea class="field" id="j-imp" maxlength="400" rows="2">${esc(j.improve)}</textarea>
-      <label class="lbl" for="j-tom">→ Prioridad de mañana</label>
+      <label class="lbl" for="j-tom">→ Prioridad de mañana <small style="color:var(--faint)">(${isToday ? 'mañana la verás como tu prioridad del día' : 'era la de hoy'})</small></label>
       <textarea class="field" id="j-tom" maxlength="400" rows="2">${esc(j.tomorrow)}</textarea>
       <div class="modal-actions"><button class="btn" data-close>Cancelar</button><button class="btn primary" data-save>Guardar${q?.active && !already ? ` · +${q.xp} XP` : ''}</button></div>`, { label: 'Diario nocturno' });
     m.querySelector('[data-save]')!.addEventListener('click', () => {
@@ -197,7 +198,7 @@ export class Modals {
         tomorrow: (m.querySelector('#j-tom') as HTMLTextAreaElement).value,
       };
       this.close();
-      this.app.act((st, d) => saveJournal(st, d, entry), 'window');
+      this.app.act((st, d) => saveJournal(st, d, entry), 'window', date);
       this.app.flash('window');
     });
   }
@@ -209,8 +210,13 @@ export class Modals {
     if (!s) return;
     const today = this.app.today;
     const ws = addDays(weekStart(today), -7 * offset);
+    if (offset < 0) {
+      this.message('Esa semana aún no ha llegado', `La planta de la semana del ${prettyDate(ws)} se iluminará día a día cuando la vivas.`, '🏗️');
+      return;
+    }
     const upTo = offset === 0 ? today : addDays(ws, 6);
     const sum = weekSummary(s, ws, upTo);
+    const weekNo = arcWeeks(s).indexOf(ws) + 1;
     const info = arcInfo(s.arc, upTo);
     const boss = bossQuest(s);
     const bossLine = boss?.active && info.phase >= 2 && offset === 0
@@ -218,7 +224,7 @@ export class Modals {
     const adj = offset === 0 ? sum.adjustment : undefined;
     const m = this.show(`
       <h2>Resumen semanal</h2>
-      <p class="lead">Semana del ${esc(prettyDate(sum.start))} al ${esc(prettyDate(sum.end))}${offset === 0 ? ' · en curso' : ''}</p>
+      <p class="lead">${weekNo > 0 ? `Semana ${weekNo} del arco (planta ${weekNo} del edificio) · ` : ''}del ${esc(prettyDate(sum.start))} al ${esc(prettyDate(sum.end))}${offset === 0 ? ' · en curso' : ''}</p>
       <div class="stats">
         <div class="stat"><div class="v">${sum.validDays}/${Math.max(sum.daysElapsed, 0) || 7}</div><div class="k">días válidos</div></div>
         <div class="stat"><div class="v">+${sum.xp}</div><div class="k">XP ganado</div></div>
@@ -313,13 +319,7 @@ export class Modals {
       }
       if (t.closest('[data-reset2]')) {
         if (!window.confirm('Última confirmación: ¿borrar el arco y empezar de cero?')) return;
-        this.app.store.clear();
-        this.app.state = null;
-        this.app.panel.close();
-        this.app.recompute();
-        this.app.render();
-        this.close(true);
-        this.onboarding();
+        this.resetArc();
       }
     });
     m.querySelector<HTMLInputElement>('[data-bedtime]')!.addEventListener('change', (e) => {
@@ -350,6 +350,59 @@ export class Modals {
     n.textContent = text;
     n.style.borderColor = error ? 'var(--danger)' : '';
     n.style.color = error ? 'var(--danger)' : '';
+  }
+
+  /** Borra la partida y vuelve a la pantalla de inicio. */
+  private resetArc() {
+    this.app.store.clear();
+    this.app.state = null;
+    this.app.panel.close();
+    this.app.recompute();
+    this.app.render();
+    this.close(true);
+    this.onboarding();
+  }
+
+  // ------------------------------------------------------------------ revisión final del arco
+
+  review() {
+    const s = this.app.state;
+    if (!s) return;
+    const today = this.app.today;
+    const r = arcReview(s, today);
+    const ended = today > s.arc.end;
+    const lvl = levelFor(s.xp, s.arc.intensity);
+    const pct = (v: number) => `${Math.round(v * 100)} %`;
+    const goals = r.goals.length
+      ? r.goals.map((g) => `<div class="goal-row ${g.done ? 'done' : ''}"><span class="check" aria-hidden="true" style="${g.done ? 'background:radial-gradient(circle at 35% 30%,#ffe2a0,#ff9a3c);border-color:transparent;color:#3a1e05' : ''}">${g.done ? '✓' : ''}</span>
+          <span class="txt">${esc(g.text)}<small class="steps">${g.steps} paso${g.steps === 1 ? ' dado' : 's dados'}${g.done ? ' · cumplida' : ''}</small></span></div>`).join('')
+      : '<div class="note">No escribiste metas para este arco.</div>';
+    const top = r.pillars[0], low = r.pillars[r.pillars.length - 1];
+    const m = this.show(`
+      <div class="brand">📜 Revisión del arco</div>
+      <h2>${ended ? 'Tu arco ha terminado' : 'Así va tu arco'}</h2>
+      <p class="lead">Del ${esc(prettyDate(s.arc.start))} al ${esc(prettyDate(s.arc.end))}. ${ended ? 'Mira hasta dónde llegaste: cada planta iluminada del edificio es una semana vivida.' : `Quedan ${r.total - r.elapsed} días para cerrarlo.`}</p>
+      <div class="stats">
+        <div class="stat"><div class="v">${r.validDays}/${r.elapsed}</div><div class="k">días con el mínimo</div></div>
+        <div class="stat"><div class="v">${r.bestStreak}</div><div class="k">mejor racha</div></div>
+        <div class="stat"><div class="v">${r.strongWeeks}</div><div class="k">semanas sólidas (≥5 días)</div></div>
+        <div class="stat"><div class="v">${lvl}</div><div class="k">nivel de habitación</div></div>
+        <div class="stat"><div class="v">${r.xp}</div><div class="k">XP</div></div>
+        <div class="stat"><div class="v">${r.journals}</div><div class="k">noches de diario</div></div>
+      </div>
+      <div class="section-title">Tus metas</div>${goals}
+      ${top && top.rate > 0 ? `<div class="note">🌟 <b>Tu pilar más constante:</b> ${pillarDef(top.pillar).icon} ${esc(pillarDef(top.pillar).name)} (${pct(top.rate)} de las diarias).${low && low !== top ? ` El que más costó: ${pillarDef(low.pillar).icon} ${esc(pillarDef(low.pillar).name)} (${pct(low.rate)}).` : ''}</div>` : ''}
+      <div data-new-zone class="modal-actions">
+        <button class="btn left" data-export>⬇ Guardar recuerdo (JSON)</button>
+        ${ended ? '<button class="btn" data-new>Empezar un nuevo arco…</button>' : ''}
+        <button class="btn primary" data-close>Cerrar</button>
+      </div>`, { label: 'Revisión del arco' });
+    m.querySelector('[data-export]')!.addEventListener('click', () => download(`winter-arc-room-recuerdo-${s.arc.end}.json`, exportJSON(s)));
+    m.querySelector('[data-new]')?.addEventListener('click', () => {
+      m.querySelector('[data-new-zone]')!.innerHTML = `<div class="note" style="border-color:var(--danger);width:100%"><b>Un arco nuevo empieza de cero</b> (habitación a oscuras, sin XP). Guarda antes tu recuerdo si quieres conservarlo.
+        <div class="q-controls" style="margin-top:10px"><button class="btn danger" data-new2>Sí, empezar de nuevo</button><button class="btn" data-close>Cancelar</button></div></div>`;
+      m.querySelector('[data-new2]')!.addEventListener('click', () => this.resetArc());
+    });
   }
 
   // ------------------------------------------------------------------ mensaje genérico

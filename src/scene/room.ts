@@ -37,22 +37,6 @@ export function windowHole(): P3[] {
   return [[x0, 0, z0], [x1, 0, z0], [x1, 0, z1], [x0, 0, z1]];
 }
 
-export function drawShadow(ctx: CanvasRenderingContext2D) {
-  const [cx, cy] = p(ROOM_SIZE / 2, ROOM_SIZE / 2, -SLAB - 1.6);
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(1, 0.42);
-  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 330);
-  g.addColorStop(0, 'rgba(2,3,12,0.55)');
-  g.addColorStop(0.55, 'rgba(2,3,12,0.25)');
-  g.addColorStop(1, 'rgba(2,3,12,0)');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(0, 0, 330, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
 export function drawFloor(ctx: CanvasRenderingContext2D) {
   const S = ROOM_SIZE;
   // Losa: caras frontales

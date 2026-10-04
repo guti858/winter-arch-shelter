@@ -1,33 +1,29 @@
 {
   "_comment": "Plantilla de tareas. tier: core = ★ (Suave), normal = Normal, plus = solo Intensa. El estado guarda una copia editable; cambiar este archivo afecta a partidas nuevas.",
   "quests": [
-    { "id": "cuerpo-mover", "pillar": "cuerpo", "title": "Moverte 30 min", "description": "Caminar, entrenar o hacer deporte. Todo cuenta.", "kind": "daily", "mode": "boolean", "xp": 20, "minimumViable": true, "tier": "core" },
-    { "id": "cuerpo-fuerza", "pillar": "cuerpo", "title": "Entreno de fuerza o deporte", "description": "Tres sesiones a la semana.", "kind": "weekly", "mode": "counter", "target": 3, "unit": "entrenos", "xp": 30, "tier": "normal" },
-    { "id": "cuerpo-movilidad", "pillar": "cuerpo", "title": "Estiramientos o movilidad 10 min", "kind": "daily", "mode": "boolean", "xp": 10, "tier": "plus" },
-    { "id": "cuerpo-pasos", "pillar": "cuerpo", "title": "8.000 pasos", "kind": "daily", "mode": "boolean", "xp": 10, "tier": "plus" },
-
-    { "id": "sueno-acostarse", "pillar": "sueno", "title": "Acostarte antes de las {hora}", "description": "Tu hora objetivo. Márcalo al día siguiente si te dormiste a tiempo.", "kind": "daily", "mode": "boolean", "xp": 20, "minimumViable": true, "tier": "core" },
-    { "id": "sueno-pantallas", "pillar": "sueno", "title": "Sin pantallas los últimos 30 min", "kind": "daily", "mode": "boolean", "xp": 15, "phaseFrom": 2, "tier": "normal" },
-    { "id": "sueno-despertar", "pillar": "sueno", "title": "Despertar a una hora fija", "description": "Cinco de siete días.", "kind": "weekly", "mode": "counter", "target": 5, "unit": "días", "xp": 25, "phaseFrom": 2, "tier": "normal" },
-
-    { "id": "foco-pomodoro", "pillar": "foco", "title": "1 bloque Pomodoro de trabajo profundo", "description": "25 minutos sin distracciones. Usa el temporizador del escritorio.", "kind": "daily", "mode": "timer", "target": 25, "xp": 20, "minimumViable": true, "tier": "core", "tags": ["pomodoro"] },
-    { "id": "foco-pomodoro3", "pillar": "foco", "title": "3 bloques Pomodoro en el día", "kind": "daily", "mode": "counter", "target": 3, "unit": "bloques", "xp": 30, "tier": "plus", "tags": ["pomodoro"] },
-    { "id": "foco-planificar", "pillar": "foco", "title": "Planificar mañana (3 prioridades)", "kind": "daily", "mode": "boolean", "xp": 10, "phaseFrom": 2, "tier": "normal" },
-
-    { "id": "mente-leer", "pillar": "mente", "title": "Leer 15 min", "kind": "daily", "mode": "timer", "target": 15, "xp": 15, "minimumViable": true, "tier": "core" },
-    { "id": "mente-libro", "pillar": "mente", "title": "Terminar un libro en el arco", "kind": "milestone", "mode": "boolean", "xp": 100, "tier": "normal" },
-    { "id": "mente-meditar", "pillar": "mente", "title": "Meditar o respirar 5 min", "kind": "daily", "mode": "timer", "target": 5, "xp": 10, "phaseFrom": 2, "tier": "normal" },
-    { "id": "mente-diario", "pillar": "mente", "title": "Diario nocturno", "description": "Tres líneas: qué salió bien, qué mejorar, prioridad de mañana.", "kind": "daily", "mode": "text", "xp": 15, "minimumViable": true, "tier": "core", "object": "window", "tags": ["journal"] },
-
-    { "id": "nutri-agua", "pillar": "nutricion", "title": "Beber ~2 L de agua", "kind": "daily", "mode": "counter", "target": 8, "unit": "vasos", "xp": 15, "minimumViable": true, "tier": "core" },
-    { "id": "nutri-casera", "pillar": "nutricion", "title": "Una comida casera con proteína y verdura", "kind": "daily", "mode": "boolean", "xp": 15, "tier": "normal" },
-    { "id": "nutri-batch", "pillar": "nutricion", "title": "Preparar comidas de la semana", "description": "Batch cooking: deja hechas varias raciones.", "kind": "weekly", "mode": "boolean", "xp": 25, "phaseFrom": 2, "tier": "normal" },
-
-    { "id": "orden-cama", "pillar": "orden", "title": "Hacer la cama + 10 min de orden", "kind": "daily", "mode": "boolean", "xp": 10, "tier": "normal", "object": "plant" },
-    { "id": "orden-limpieza", "pillar": "orden", "title": "Limpieza a fondo de una zona", "kind": "weekly", "mode": "boolean", "xp": 20, "phaseFrom": 2, "tier": "normal", "object": "plant" },
-    { "id": "orden-gastos", "pillar": "orden", "title": "Revisión de gastos de la semana (10 min)", "kind": "weekly", "mode": "boolean", "xp": 25, "tier": "normal", "object": "table" },
-    { "id": "orden-contactar", "pillar": "orden", "title": "Contactar con una persona importante", "kind": "weekly", "mode": "counter", "target": 2, "unit": "personas", "xp": 20, "tier": "normal", "object": "table" },
-    { "id": "orden-reto", "pillar": "orden", "title": "Reto semanal", "description": "Un reto distinto cada lunes. Cumplirlo deja un recuerdo en la estantería.", "kind": "weekly", "mode": "boolean", "xp": 60, "phaseFrom": 2, "tier": "core", "object": "corkboard", "tags": ["boss"] }
+    {"id": "cuerpo-mover", "pillar": "cuerpo", "title": "Moverte 30 min", "description": "Caminar, entrenar o hacer deporte. Todo cuenta.", "kind": "daily", "mode": "boolean", "xp": 20, "minimumViable": true, "tier": "core"},
+    {"id": "cuerpo-fuerza", "pillar": "cuerpo", "title": "Entreno de fuerza o deporte", "description": "Tres sesiones a la semana.", "kind": "weekly", "mode": "counter", "target": 3, "unit": "entrenos", "xp": 30, "tier": "normal"},
+    {"id": "cuerpo-movilidad", "pillar": "cuerpo", "title": "Estiramientos o movilidad 10 min", "kind": "daily", "mode": "boolean", "xp": 10, "tier": "plus"},
+    {"id": "cuerpo-pasos", "pillar": "cuerpo", "title": "8.000 pasos", "kind": "daily", "mode": "boolean", "xp": 10, "tier": "plus"},
+    {"id": "sueno-acostarse", "pillar": "sueno", "title": "Acostarte antes de las {hora}", "description": "Tu hora objetivo. Márcalo al día siguiente si te dormiste a tiempo.", "kind": "daily", "mode": "boolean", "xp": 20, "minimumViable": true, "tier": "core"},
+    {"id": "sueno-pantallas", "pillar": "sueno", "title": "Sin pantallas los últimos 30 min", "kind": "daily", "mode": "boolean", "xp": 15, "phaseFrom": 2, "tier": "normal"},
+    {"id": "sueno-despertar", "pillar": "sueno", "title": "Despertar a una hora fija", "description": "Cinco de siete días.", "kind": "weekly", "mode": "counter", "target": 5, "unit": "días", "xp": 25, "phaseFrom": 2, "tier": "normal"},
+    {"id": "foco-pomodoro", "pillar": "foco", "title": "1 bloque Pomodoro de trabajo profundo", "description": "25 minutos sin distracciones. Usa el temporizador del escritorio.", "kind": "daily", "mode": "timer", "target": 25, "xp": 20, "minimumViable": true, "tier": "core", "tags": ["pomodoro"]},
+    {"id": "foco-pomodoro3", "pillar": "foco", "title": "3 bloques Pomodoro en el día", "kind": "daily", "mode": "counter", "target": 3, "unit": "bloques", "xp": 30, "tier": "plus", "tags": ["pomodoro"]},
+    {"id": "foco-planificar", "pillar": "foco", "title": "Planificar mañana (3 prioridades)", "kind": "daily", "mode": "boolean", "xp": 10, "phaseFrom": 2, "tier": "normal"},
+    {"id": "mente-leer", "pillar": "mente", "title": "Leer 15 min", "kind": "daily", "mode": "timer", "target": 15, "xp": 15, "minimumViable": true, "tier": "core"},
+    {"id": "mente-libro", "pillar": "mente", "title": "Terminar un libro en el arco", "kind": "milestone", "mode": "boolean", "xp": 100, "tier": "normal"},
+    {"id": "mente-meditar", "pillar": "mente", "title": "Meditar o respirar 5 min", "kind": "daily", "mode": "timer", "target": 5, "xp": 10, "phaseFrom": 2, "tier": "normal"},
+    {"id": "mente-diario", "pillar": "mente", "title": "Diario nocturno", "description": "Tres líneas: qué salió bien, qué mejorar, prioridad de mañana.", "kind": "daily", "mode": "text", "xp": 15, "minimumViable": true, "tier": "core", "object": "window", "tags": ["journal"]},
+    {"id": "nutri-agua", "pillar": "nutricion", "title": "Beber ~2 L de agua", "kind": "daily", "mode": "counter", "target": 8, "unit": "vasos", "xp": 15, "minimumViable": true, "tier": "core"},
+    {"id": "nutri-casera", "pillar": "nutricion", "title": "Una comida casera con proteína y verdura", "kind": "daily", "mode": "boolean", "xp": 15, "tier": "normal"},
+    {"id": "nutri-batch", "pillar": "nutricion", "title": "Preparar comidas de la semana", "description": "Batch cooking: deja hechas varias raciones.", "kind": "weekly", "mode": "boolean", "xp": 25, "phaseFrom": 2, "tier": "normal"},
+    {"id": "orden-cama", "pillar": "orden", "title": "Hacer la cama + 10 min de orden", "kind": "daily", "mode": "boolean", "xp": 10, "tier": "normal", "object": "plant"},
+    {"id": "orden-limpieza", "pillar": "orden", "title": "Limpieza a fondo de una zona", "kind": "weekly", "mode": "boolean", "xp": 20, "phaseFrom": 2, "tier": "normal", "object": "plant"},
+    {"id": "orden-gastos", "pillar": "orden", "title": "Revisión de gastos de la semana (10 min)", "kind": "weekly", "mode": "boolean", "xp": 25, "tier": "normal", "object": "table"},
+    {"id": "orden-contactar", "pillar": "orden", "title": "Contactar con una persona importante", "kind": "weekly", "mode": "counter", "target": 2, "unit": "personas", "xp": 20, "tier": "normal", "object": "table"},
+    {"id": "orden-reto", "pillar": "orden", "title": "Reto semanal", "description": "Un reto distinto cada lunes. Cumplirlo deja un recuerdo en la estantería.", "kind": "weekly", "mode": "boolean", "xp": 60, "phaseFrom": 2, "tier": "core", "object": "corkboard", "tags": ["boss"]},
+    {"id": "metas-paso", "pillar": "orden", "title": "Dar un paso hacia una de tus metas", "description": "Algo concreto, aunque sea pequeño: una lección del curso, una tirada, un ahorro. Cada paso queda clavado en el corcho.", "kind": "daily", "mode": "boolean", "xp": 15, "tier": "core", "object": "corkboard", "tags": ["goalstep"]}
   ],
   "bossChallenges": [
     "Una semana sin redes sociales después de las 21:00",

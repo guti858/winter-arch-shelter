@@ -1,7 +1,7 @@
 // HUD superior (día, racha, nivel), dock de pilares, tooltip, toasts y avisos.
 import type { App } from '../app';
 import { OBJECT_DEFS, OBJECTS, type ObjectId } from '../game/state';
-import { timerRemaining } from '../game/quests';
+import { dayPriority, timerRemaining } from '../game/quests';
 import { el, esc, fmtClock, pct } from './dom';
 
 export class Hud {
@@ -31,6 +31,7 @@ export class Hud {
       if (a === 'week') this.app.modals.summary();
       if (a === 'settings') this.app.modals.settings();
       if (a === 'timer') this.app.panel.open('desk');
+      if (a === 'prio') this.app.panel.open('today');
     });
     this.dock.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest<HTMLElement>('[data-obj]');
@@ -53,7 +54,7 @@ export class Hud {
       ? `<b>Calentamiento</b> <span class="phase">· empieza en ${arc.daysUntilStart} día${arc.daysUntilStart === 1 ? '' : 's'}</span>`
       : arc.status === 'post'
         ? `<b>Arco completado</b> <span class="phase">· ${arc.total}/${arc.total}</span>`
-        : `<b>Día <span class="num">${arc.day}/${arc.total}</span></b> <span class="phase">· Fase ${arc.phase}: ${esc(arc.phaseName)}</span>`;
+        : `<b>Día <span class="num">${arc.day}/${arc.total}</span></b> <span class="phase" title="Fase ${arc.phase}">· ${esc(arc.phaseName)}</span>`;
     const xpTxt = level.to === null ? `${s.xp} XP · máximo` : `${s.xp} / ${level.to} XP`;
     this.bar.innerHTML = `
       <div class="hud-chip hud-day" title="Arco: ${esc(s.arc.start)} → ${esc(s.arc.end)}">❄ ${dayLabel}</div>
@@ -66,6 +67,7 @@ export class Hud {
         <span class="xpbar" role="progressbar" aria-label="Experiencia" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(level.pct * 100)}"><i style="--pct:${pct(level.pct)}"></i></span>
         <span class="xp num">${xpTxt}</span>
       </div>
+      ${this.priorityChip()}
       <div class="hud-chip hud-timer" data-hud-timer hidden></div>
       <div class="hud-spacer"></div>
       <div class="hud-actions">
@@ -88,6 +90,16 @@ export class Hud {
         ${p.total ? `<span class="count ${full ? 'full' : ''}">${p.done}/${p.total}</span>` : ''}
       </button>`;
     }).join('');
+  }
+
+  /** Prioridad del día (de la "prioridad de mañana" del diario de anoche). */
+  private priorityChip(): string {
+    const s = this.app.state;
+    if (!s) return '';
+    const p = dayPriority(s, this.app.today);
+    if (!p) return '';
+    const done = !!s.log[this.app.today]?.priorityDone;
+    return `<button class="hud-chip hud-prio ${done ? 'done' : ''}" data-action="prio" title="Prioridad de hoy: ${esc(p)}" aria-label="Prioridad de hoy: ${esc(p)}${done ? ' (cumplida)' : ''}">🎯 <span>${esc(p)}</span>${done ? ' ✓' : ''}</button>`;
   }
 
   updateTimer() {
@@ -119,6 +131,14 @@ export class Hud {
       ? (p.done ? 'diario escrito hoy' : 'diario nocturno')
       : p.total ? `${p.done}/${p.total} ${target === 'corkboard' ? 'metas' : 'hoy'}` : '';
     this.tip.innerHTML = `<b>${def.icon} ${esc(def.hint)}</b>${sub ? ` <span class="sub">· ${esc(sub)}</span>` : ''}`;
+    this.tip.style.left = `${x}px`;
+    this.tip.style.top = `${y}px`;
+    this.tip.classList.add('show');
+  }
+
+  /** Tooltip con HTML ya escapado (plantas del edificio). */
+  tooltipHtml(html: string, x: number, y: number) {
+    this.tip.innerHTML = html;
     this.tip.style.left = `${x}px`;
     this.tip.style.top = `${y}px`;
     this.tip.classList.add('show');

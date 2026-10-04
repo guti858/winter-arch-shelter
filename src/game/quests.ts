@@ -1,8 +1,8 @@
 // Lógica de tareas: progreso, completado, XP, día mínimo viable, bonus, temporizadores, diario y metas.
 import { addDays, arcInfo, arcWeekIndex, weekDays, weekStart } from './calendar';
 import {
-  BOSS_CHALLENGES, GOAL_XP, dayLog, hasTag, peekDay, questObject,
-  type GameState, type Journal, type ObjectId, type Quest,
+  BOSS_CHALLENGES, GOAL_XP, MAX_TOKENS, PRIORITY_XP, dayLog, hasTag, peekDay, questObject,
+  type GameState, type Goal, type Journal, type ObjectId, type Quest,
 } from './state';
 
 export const MIN_REQUIRED = 3; // ★ necesarias para el día mínimo viable
@@ -17,6 +17,9 @@ export type GameEvent =
   | { type: 'minimum' }
   | { type: 'allDone'; amount: number }
   | { type: 'goal'; goalId: string; done: boolean }
+  | { type: 'goalStep'; goalId: string; on: boolean }
+  | { type: 'priority'; done: boolean }
+  | { type: 'tokenRefund' }
   | { type: 'timerDone'; questId: string | null; kind: 'work' | 'break' };
 
 // ---------------------------------------------------------------------------
@@ -26,10 +29,11 @@ export function findQuest(state: GameState, id: string): Quest | undefined {
   return state.quests.find((q) => q.id === id);
 }
 
-/** Tareas activas ese día (activas + desbloqueadas por fase). */
+/** Tareas activas ese día (activas + desbloqueadas por fase). El paso hacia una meta solo existe si quedan metas abiertas. */
 export function activeQuests(state: GameState, date: string): Quest[] {
   const phase = arcInfo(state.arc, date).phase;
-  return state.quests.filter((q) => q.active && phase >= (q.phaseFrom ?? 1));
+  const goalsOpen = openGoals(state).length > 0;
+  return state.quests.filter((q) => q.active && phase >= (q.phaseFrom ?? 1) && (goalsOpen || !hasTag(q, 'goalstep')));
 }
 
 /** Días que cuentan para el progreso de la tarea vista desde `date`. */
@@ -101,6 +105,12 @@ export function recomputeDay(state: GameState, date: string): GameEvent[] {
   const wasMet = d.minimumMet;
   d.minimumMet = minimumStatus(state, date).met;
   if (!wasMet && d.minimumMet) events.push({ type: 'minimum' });
+  // Si completas a posteriori un día que salvó un token, el token vuelve
+  if (d.minimumMet && d.tokenUsed) {
+    delete d.tokenUsed;
+    state.restTokens = Math.min(MAX_TOKENS, state.restTokens + 1);
+    events.push({ type: 'tokenRefund' });
+  }
 
   const daily = activeQuests(state, date).filter((q) => q.kind === 'daily');
   const all = daily.length > 0 && !d.reducedMode && daily.every((q) => isQuestDone(state, q, date));
@@ -289,6 +299,57 @@ export function addGoal(state: GameState, text: string) {
   if (!t || state.goals.length >= 3) return;
   const n = state.goals.reduce((m, g) => Math.max(m, Number(g.id.split('-')[1]) || 0), 0) + 1;
   state.goals.push({ id: `meta-${n}`, text: t, done: false });
+}
+
+export function openGoals(state: GameState): Goal[] {
+  return state.goals.filter((g) => !g.done);
+}
+
+export function goalStepQuest(state: GameState): Quest | undefined {
+  return state.quests.find((q) => hasTag(q, 'goalstep'));
+}
+
+/** Pasos dados hacia una meta durante el arco (días en que se marcó). */
+export function goalStepCount(state: GameState, goalId: string): number {
+  let n = 0;
+  for (const d of Object.values(state.log)) if (d.goalSteps?.includes(goalId)) n++;
+  return n;
+}
+
+export function goalSteppedOn(state: GameState, goalId: string, date: string): boolean {
+  return !!peekDay(state, date)?.goalSteps?.includes(goalId);
+}
+
+/** Marca/desmarca "di un paso hacia esta meta" ese día. El primer paso del día completa la tarea diaria. */
+export function toggleGoalStep(state: GameState, goalId: string, date: string): GameEvent[] {
+  if (!state.goals.some((g) => g.id === goalId)) return [];
+  const d = dayLog(state, date);
+  const steps = new Set(d.goalSteps ?? []);
+  const on = !steps.has(goalId);
+  if (on) steps.add(goalId);
+  else steps.delete(goalId);
+  if (steps.size) d.goalSteps = [...steps];
+  else delete d.goalSteps;
+  const events: GameEvent[] = [{ type: 'goalStep', goalId, on }];
+  const q = goalStepQuest(state);
+  if (q && q.active && steps.size > 0 !== isQuestDone(state, q, date)) events.push(...setQuestDone(state, q.id, date, steps.size > 0));
+  return events;
+}
+
+// ---------------------------------------------------------------------------
+// Prioridad del día (sale de "prioridad de mañana" en el diario de la víspera)
+
+export function dayPriority(state: GameState, date: string): string | null {
+  return peekDay(state, addDays(date, -1))?.journal?.tomorrow?.trim() || null;
+}
+
+export function togglePriority(state: GameState, date: string): GameEvent[] {
+  if (!dayPriority(state, date)) return [];
+  const d = dayLog(state, date);
+  d.priorityDone = !d.priorityDone;
+  const amount = d.priorityDone ? PRIORITY_XP : -PRIORITY_XP;
+  award(state, date, amount);
+  return [{ type: 'priority', done: !!d.priorityDone }, { type: 'xp', amount, object: 'window' }];
 }
 
 // ---------------------------------------------------------------------------
