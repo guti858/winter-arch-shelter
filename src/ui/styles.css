@@ -41,8 +41,9 @@ html, body {
   touch-action: manipulation;
 }
 
+/* La capa de UI deja pasar el puntero al canvas salvo en sus elementos interactivos. */
 #ui { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
-#ui > * { pointer-events: auto; }
+.dock, .panel, .overlay, .banner, .toast, .hud > * { pointer-events: auto; }
 
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -64,7 +65,6 @@ button { cursor: pointer; }
   background: linear-gradient(180deg, rgba(5, 7, 22, 0.75), rgba(5, 7, 22, 0));
   pointer-events: none;
 }
-.hud > * { pointer-events: auto; }
 
 .hud-chip {
   display: inline-flex;
@@ -105,7 +105,7 @@ button { cursor: pointer; }
 }
 .hud-level .xp { font-size: 12px; color: var(--muted); }
 
-.hud-spacer { flex: 1; }
+.hud-spacer { flex: 1; pointer-events: none !important; }
 .hud-actions { display: flex; gap: 6px; }
 .btn-ghost {
   display: inline-flex; align-items: center; gap: 6px;

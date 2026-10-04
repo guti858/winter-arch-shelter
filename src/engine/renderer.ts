@@ -234,8 +234,8 @@ export class Renderer {
   }
 
   /** Celebración de subida de nivel: barrido de luz y chispas desde el centro del cuarto. */
-  celebrate() {
-    this.sweep = 0;
+  celebrate(reduced = false) {
+    if (!reduced) this.sweep = 0;
     const [x, y] = this.toScreen(4, 4, 1.2);
     this.particles.burst(x, y, 60, '#ffd98a');
   }
@@ -300,7 +300,8 @@ export class Renderer {
     this.parallax.x += (want.x - this.parallax.x) * Math.min(1, dt * 3);
     this.parallax.y += (want.y - this.parallax.y) * Math.min(1, dt * 3);
 
-    this.city.update(dt);
+    this.particles.reduced = env.reducedMotion;
+    this.city.update(env.reducedMotion ? 0 : dt);
     this.gustT = Math.max(0, this.gustT - dt);
     const gust = env.reducedMotion ? 0 : Math.sin(Math.min(1, this.gustT / 5) * Math.PI);
     this.snow.setIntensity(env.reducedMotion ? 45 : SNOW_BY_PHASE[env.phase] + 150 * gust);

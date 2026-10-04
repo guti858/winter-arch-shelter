@@ -333,6 +333,7 @@ export class Modals {
         const state = importJSON(await file.text());
         this.app.state = state;
         this.app.applyReducedMotionClass();
+        this.app.sfx.setEnabled(state.settings.sound);
         this.app.checkDay(true);
         this.app.afterChange();
         this.close(true);

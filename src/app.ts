@@ -52,9 +52,13 @@ export class App {
       onMove: (s) => this.onPointerMove(s),
       onTap: (s) => this.onTap(s),
     });
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
     window.addEventListener('resize', () => {
-      this.renderer.resize();
-      this.renderer.setRightInset(this.panel.current ? this.panel.el.offsetWidth + 12 : 0);
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        this.renderer.resize();
+        this.renderer.setRightInset(this.panel.current ? this.panel.el.offsetWidth + 12 : 0);
+      }, 120);
     });
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
@@ -257,7 +261,7 @@ export class App {
     if (lvl > seen) {
       this.state.meta.lastLevelSeen = lvl;
       if (celebrate) {
-        this.renderer.celebrate();
+        this.renderer.celebrate(this.reducedMotion);
         for (const o of OBJECTS) this.flash(o, 0.5);
         this.hud.toast(`<strong>Nivel de habitación ${lvl}</strong>${LEVEL_UNLOCKS[lvl]}`, 'big');
         this.sfx.play('levelup');
@@ -276,8 +280,10 @@ export class App {
       const focus = phase === 2 ? 'Sube la carga: nuevas tareas y retos semanales.' : 'Consolida lo construido y cierra tus metas.';
       this.modals.enqueue(() => {
         this.hud.phaseCard(`Fase ${phase}`, phaseName, focus);
-        this.renderer.sweep = 0;
-        this.renderer.gust(6);
+        if (!this.reducedMotion) {
+          this.renderer.sweep = 0;
+          this.renderer.gust(6);
+        }
         this.sfx.play('levelup');
       });
     }

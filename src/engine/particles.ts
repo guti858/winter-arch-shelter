@@ -107,8 +107,11 @@ export interface Particle {
 
 export class Particles {
   list: Particle[] = [];
+  /** Movimiento reducido: menos chispas. */
+  reduced = false;
 
   burst(x: number, y: number, n = 26, color = '#ffd98a') {
+    if (this.reduced) n = Math.ceil(n / 4);
     for (let i = 0; i < n; i++) {
       const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.4;
       const sp = 60 + Math.random() * 140;
