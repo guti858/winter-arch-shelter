@@ -22,10 +22,17 @@ export class Modals {
     return !!this.overlay;
   }
 
-  /** Abre el modal ahora o cuando se cierre el actual (p. ej. reentrada y luego resumen). */
-  enqueue(open: () => void) {
-    if (this.overlay) this.queue.push(open);
-    else open();
+  /**
+   * Encola una acción para cuando no haya ningún modal abierto (p. ej. reentrada → resumen →
+   * tarjeta de fase). Las acciones que no abren modal se ejecutan seguidas.
+   */
+  enqueue(action: () => void) {
+    this.queue.push(action);
+    this.drain();
+  }
+
+  private drain() {
+    while (!this.overlay && this.queue.length) this.queue.shift()!();
   }
 
   private show(html: string, opts: { closable?: boolean; label: string } = { label: '' }): HTMLElement {
@@ -53,9 +60,10 @@ export class Modals {
     this.cleanup = null;
     this.overlay.remove();
     this.overlay = null;
-    if (!silent) this.lastFocus?.focus?.({ preventScroll: true });
-    const next = silent ? undefined : this.queue.shift();
-    if (next) setTimeout(next, 120);
+    if (!silent) {
+      this.lastFocus?.focus?.({ preventScroll: true });
+      setTimeout(() => this.drain(), 120);
+    }
   }
 
   private trapFocus(e: KeyboardEvent) {

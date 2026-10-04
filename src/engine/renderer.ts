@@ -156,6 +156,8 @@ export class Renderer {
   readonly particles = new Particles();
   /** Progreso del barrido de luz de subida de nivel (0..1) o null. */
   sweep: number | null = null;
+  /** Ráfaga de nieve (segundos restantes) al cambiar de fase. */
+  private gustT = 0;
   private parallax = { x: 0, y: 0 };
   private moteTimer = 0;
   private steamTimer = 0;
@@ -226,6 +228,18 @@ export class Renderer {
     drawShadow(ctx);
   }
 
+  /** Ráfaga de nieve y viento (transición de fase). */
+  gust(seconds = 5) {
+    this.gustT = seconds;
+  }
+
+  /** Celebración de subida de nivel: barrido de luz y chispas desde el centro del cuarto. */
+  celebrate() {
+    this.sweep = 0;
+    const [x, y] = this.toScreen(4, 4, 1.2);
+    this.particles.burst(x, y, 60, '#ffd98a');
+  }
+
   /** Ancho ocupado por un panel a la derecha (px CSS): desplaza el cuarto lo justo para no taparlo. */
   setRightInset(px: number) {
     const { view } = this;
@@ -287,8 +301,10 @@ export class Renderer {
     this.parallax.y += (want.y - this.parallax.y) * Math.min(1, dt * 3);
 
     this.city.update(dt);
-    this.snow.setIntensity(env.reducedMotion ? 45 : SNOW_BY_PHASE[env.phase]);
-    this.snow.update(dt, t, -8 + Math.sin(t * 0.13) * 10);
+    this.gustT = Math.max(0, this.gustT - dt);
+    const gust = env.reducedMotion ? 0 : Math.sin(Math.min(1, this.gustT / 5) * Math.PI);
+    this.snow.setIntensity(env.reducedMotion ? 45 : SNOW_BY_PHASE[env.phase] + 150 * gust);
+    this.snow.update(dt, t, -8 + Math.sin(t * 0.13) * 10 - 70 * gust);
 
     setScreenTransform(ctx, view);
     ctx.globalCompositeOperation = 'source-over';

@@ -171,7 +171,6 @@ export class App {
     if (res.tokensEarned) this.hud.toast(`❄️ Semana sólida: ganas ${res.tokensEarned > 1 ? res.tokensEarned + ' tokens' : 'un token'} de descanso.`, 'ice');
     if (res.tokensUsedOn.length) this.hud.toast(`❄️ Un token de descanso salvó tu racha (${res.tokensUsedOn.length} día${res.tokensUsedOn.length > 1 ? 's' : ''}).`, 'ice');
     this.recompute();
-    this.checkPhase();
     this.checkLevel(false);
     if (shouldShowReentry(this.state, today)) {
       this.state.meta.reentryShown = today;
@@ -181,6 +180,7 @@ export class App {
       this.state.meta.lastSummaryWeek = weekStart(today);
       this.modals.enqueue(() => this.modals.summary());
     }
+    this.checkPhase();
     this.save();
     this.render();
   }
@@ -257,7 +257,8 @@ export class App {
     if (lvl > seen) {
       this.state.meta.lastLevelSeen = lvl;
       if (celebrate) {
-        this.renderer.sweep = 0;
+        this.renderer.celebrate();
+        for (const o of OBJECTS) this.flash(o, 0.5);
         this.hud.toast(`<strong>Nivel de habitación ${lvl}</strong>${LEVEL_UNLOCKS[lvl]}`, 'big');
         this.sfx.play('levelup');
       }
@@ -273,9 +274,12 @@ export class App {
     if (status !== 'pre' && phase > this.state.meta.lastPhaseSeen) {
       this.state.meta.lastPhaseSeen = phase;
       const focus = phase === 2 ? 'Sube la carga: nuevas tareas y retos semanales.' : 'Consolida lo construido y cierra tus metas.';
-      this.hud.phaseCard(`Fase ${phase}`, phaseName, focus);
-      this.renderer.sweep = 0;
-      this.sfx.play('levelup');
+      this.modals.enqueue(() => {
+        this.hud.phaseCard(`Fase ${phase}`, phaseName, focus);
+        this.renderer.sweep = 0;
+        this.renderer.gust(6);
+        this.sfx.play('levelup');
+      });
     }
   }
 
