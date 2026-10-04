@@ -1,0 +1,113 @@
+{
+  "pillars": [
+    {
+      "id": "cuerpo",
+      "name": "Cuerpo",
+      "icon": "💪",
+      "color": "#ff8a5c",
+      "description": "Movimiento y fuerza"
+    },
+    {
+      "id": "sueno",
+      "name": "Sueño",
+      "icon": "🌙",
+      "color": "#9fa8ff",
+      "description": "Horarios y descanso"
+    },
+    {
+      "id": "foco",
+      "name": "Foco",
+      "icon": "🎯",
+      "color": "#7fd6ff",
+      "description": "Trabajo y estudio profundo"
+    },
+    {
+      "id": "mente",
+      "name": "Mente",
+      "icon": "📚",
+      "color": "#c39bff",
+      "description": "Lectura, aprendizaje y calma"
+    },
+    {
+      "id": "nutricion",
+      "name": "Nutrición",
+      "icon": "🥕",
+      "color": "#8fdc7a",
+      "description": "Comida y agua"
+    },
+    {
+      "id": "orden",
+      "name": "Orden y vida",
+      "icon": "🌿",
+      "color": "#ffd98a",
+      "description": "Hogar, finanzas y relaciones"
+    }
+  ],
+  "objects": {
+    "mat": {
+      "pillar": "cuerpo",
+      "name": "Esterilla y mancuernas",
+      "hint": "Cuerpo",
+      "icon": "💪",
+      "short": "Cuerpo"
+    },
+    "bed": {
+      "pillar": "sueno",
+      "name": "Cama",
+      "hint": "Sueño",
+      "icon": "🌙",
+      "short": "Sueño"
+    },
+    "desk": {
+      "pillar": "foco",
+      "name": "Escritorio",
+      "hint": "Foco / Estudio",
+      "icon": "🎯",
+      "short": "Foco"
+    },
+    "shelf": {
+      "pillar": "mente",
+      "name": "Estantería",
+      "hint": "Mente / Lectura",
+      "icon": "📚",
+      "short": "Mente"
+    },
+    "kitchen": {
+      "pillar": "nutricion",
+      "name": "Cocina",
+      "hint": "Nutrición",
+      "icon": "🥕",
+      "short": "Nutrición"
+    },
+    "plant": {
+      "pillar": "orden",
+      "name": "Planta",
+      "hint": "Hábitos / Orden",
+      "icon": "🌿",
+      "short": "Orden"
+    },
+    "table": {
+      "pillar": "orden",
+      "name": "Mesa baja",
+      "hint": "Social / Finanzas",
+      "icon": "☕",
+      "short": "Social"
+    },
+    "window": {
+      "pillar": "mente",
+      "name": "Ventana",
+      "hint": "Reflexión · Diario nocturno",
+      "special": "journal",
+      "icon": "✍️",
+      "short": "Diario"
+    },
+    "corkboard": {
+      "pillar": "orden",
+      "name": "Corcho de metas",
+      "hint": "Metas del arco",
+      "special": "goals",
+      "icon": "📌",
+      "short": "Metas"
+    }
+  }
+}
